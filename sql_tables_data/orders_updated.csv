@@ -1,0 +1,16 @@
+OrderID,OrderDate,CustomerID,Status,ShippingAddress
+1,2025-04-16 12:34:06,10,Cancelled,49190 Patel Shore Caseymouth MT 64752
+2,2025-05-11 10:19:33,2,Completed,824 Terri Plaza Heidiberg WV 64841
+3,2025-05-05 03:54:32,9,Completed,901 Taylor Mountain Apt. 046 Jasonmouth WV 50193
+4,2025-07-29 18:35:01,10,Shipped,USCGC Sanders FPO AP 26496
+5,2025-02-01 07:02:17,8,Pending,083 John Lodge Suite 837 Westtown LA 29546
+6,2025-02-23 17:44:23,1,Shipped,477 Peterson Center Shelleyfort CA 53022
+7,2025-02-28 13:50:37,5,Completed,7379 Rogers Park Hunterborough KS 45109
+8,2025-03-31 19:30:47,2,Shipped,726 Jessica Run Suite 987 Grahamshire MD 32678
+9,2025-05-29 18:08:51,4,Pending,1708 Zoe Keys Apt. 100 East Mary FL 31767
+10,2025-09-27 12:04:51,7,Completed,0366 Melissa Track Suite 705 Karenchester WA 96790
+11,2025-03-01 08:14:53,8,Completed,3467 Paul Skyway Ramseymouth DC 82061
+12,2025-10-02 08:18:13,3,Completed,374 Jackson Rest Port Loriport OR 03866
+13,2025-03-25 02:11:07,6,Shipped,1823 Joanna Harbor Tinaborough IN 47802
+14,2025-01-25 22:39:22,6,Completed,29413 Angela Mall Port Alexandra NV 39475
+15,2025-05-6 08:47:25,4,Pending,9578 Coleman Summit Michaelmouth ME 33452

@@ -1,0 +1,16 @@
+ProductID,ProductName,Price,SupplierID
+1,Kindle Paperwhite,422.0,3
+2,MacBook Air M2,747.0,1
+3,Kindle Paperwhite,2247.0,5
+4,iPhone 14 Pro,1812.0,1
+5,Laptop Dell XPS,371.0,2
+6,Nintendo Switch OLED,1845.0,5
+7,MacBook Air M2,2176.0,5
+8,Asus ROG Strix Laptop,739.0,5
+9,Logitech MX Master 3 Mouse,2447.0,1
+10,Samsung 4K Monitor,2436.0,4
+11,Sony WH-1000XM5 Headphones,905.0,2
+12,Samsung 4K Monitor,1076.0,1
+13,Asus ROG Strix Laptop,380.0,3
+14,Apple Watch Ultra,867.0,1
+15,GoPro Hero 11,1432.0,1
