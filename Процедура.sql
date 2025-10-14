@@ -1,34 +1,24 @@
 DELIMITER //
 
 CREATE PROCEDURE CreateRandomOrderForCustomer(
-    IN p_name VARCHAR(100),
-    IN p_address VARCHAR(255)
+    IN p_customer_id INT
 )
 BEGIN
-    DECLARE v_customer_id INT;
     DECLARE v_order_id INT;
     DECLARE v_total_amount DECIMAL(10,2);
-    DECLARE v_email VARCHAR(100);
-    DECLARE v_phone VARCHAR(20);
-    DECLARE v_country VARCHAR(50);
-    DECLARE v_courier_id INT;
     DECLARE v_courier_name VARCHAR(100);
     DECLARE v_courier_country VARCHAR(50);
     DECLARE v_courier_price DECIMAL(10,2);
     DECLARE v_product_limit INT;
+    DECLARE v_address VARCHAR(255);
 
-    SET v_email = CONCAT(LOWER(REPLACE(p_name, ' ', '')), FLOOR(RAND()*1000), '@example.com');
-    SET v_phone = CONCAT('+380', FLOOR(100000000 + RAND() * 899999999));
-    SET v_country = 'Ukraine';
-
-    SET FOREIGN_KEY_CHECKS = 0;
-
-    INSERT INTO Customer (Name, Email, Phone, Country)
-    VALUES (p_name, v_email, v_phone, v_country);
-    SET v_customer_id = LAST_INSERT_ID();
+    SELECT CONCAT('Street_', FLOOR(RAND()*100), ' ', Country)
+    INTO v_address
+    FROM Customer
+    WHERE CustomerID = p_customer_id;
 
     INSERT INTO Orders (OrderDate, CustomerID, ShippingAddress, Status)
-    VALUES (NOW(), v_customer_id, p_address, 'Pending');
+    VALUES (NOW(), p_customer_id, v_address, 'Pending');
     SET v_order_id = LAST_INSERT_ID();
 
     SET v_product_limit = FLOOR(1 + RAND() * 3);
@@ -39,23 +29,12 @@ BEGIN
     ORDER BY RAND()
     LIMIT v_product_limit;
 
-    SELECT CourierID, Name, Country, Price
-    INTO v_courier_id, v_courier_name, v_courier_country, v_courier_price
-    FROM Courier
-    ORDER BY RAND()
-    LIMIT 1;
+    SET v_courier_name = CONCAT('Courier_', FLOOR(RAND()*1000));
+    SET v_courier_country = 'Ukraine';
+    SET v_courier_price = 10 + RAND() * 20;
 
-    IF v_courier_id IS NULL THEN
-        SET v_courier_name = CONCAT('Courier_', FLOOR(RAND()*1000));
-        SET v_courier_country = 'Ukraine';
-        SET v_courier_price = 10 + RAND() * 20;
-
-        INSERT INTO Courier (Name, Country, Price, OrderID)
-        VALUES (v_courier_name, v_courier_country, v_courier_price, v_order_id);
-    ELSE
-        INSERT INTO Courier (Name, Country, Price, OrderID)
-        VALUES (v_courier_name, v_courier_country, v_courier_price, v_order_id);
-    END IF;
+    INSERT INTO Courier (Name, Country, Price, OrderID)
+    VALUES (v_courier_name, v_courier_country, v_courier_price, v_order_id);
 
     SELECT SUM(p.Price * od.Quantity)
     INTO v_total_amount
@@ -66,12 +45,9 @@ BEGIN
     INSERT INTO Payment (OrderID, Status, Amount, PaymentDate)
     VALUES (v_order_id, 'Paid', v_total_amount, NOW());
 
-    SET FOREIGN_KEY_CHECKS = 1;
-
     SELECT 
         c.Name AS Customer,
         c.Email,
-        c.Phone,
         o.OrderID,
         o.OrderDate,
         p.ProductName,
@@ -91,4 +67,4 @@ END //
 
 DELIMITER ;
 
-CALL CreateRandomOrderForCustomer('Oleg Ohrin', '0867 st. Stepan Bandera 45');
+CALL CreateRandomOrderForCustomer(3);
