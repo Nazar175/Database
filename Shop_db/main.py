@@ -1,7 +1,4 @@
-# Для запуску програми: cd Shop_db
-# Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned
-# venv/Scripts/activate
-# uvicorn main:app --reload
+
 
 from fastapi import FastAPI, Depends, HTTPException, Path
 from fastapi.responses import JSONResponse
@@ -23,7 +20,7 @@ app = FastAPI(title="ShopDB API")
 class OrderCreate(BaseModel):
     order_date: datetime = Field(..., example="2025-10-18T10:00:00")
     shipping_address: str = Field(..., example="Khreshchatyk 1, Kyiv")
-    status: Optional[str] = Field(None, example="Pending")  # will be converted to Enum by DB
+    status: Optional[str] = Field(None, example="Pending")
 
 class OrderUpdate(BaseModel):
     shipping_address: Optional[str] = None
@@ -36,8 +33,9 @@ class OrderOut(BaseModel):
     ShippingAddress: str
     Status: str
 
-    class Config:
-        orm_mode = True
+    model_config = {
+        "from_attributes": True
+    }
 
 class PaymentCreate(BaseModel):
     status: str = Field(..., example="Paid")
@@ -56,13 +54,14 @@ class PaymentOut(BaseModel):
     Amount: Decimal
     PaymentDate: Optional[datetime]
 
-    class Config:
-        orm_mode = True
+    model_config = {
+        "from_attributes": True
+    }
 
 class GiftCreate(BaseModel):
     amount: Decimal = Field(..., example="10.00")
     expares_date: datetime = Field(..., example="2026-01-01T00:00:00")
-    type_: str = Field(..., alias="type", example="Certificate")  # alias to accept "type"
+    type_: str = Field(..., alias="type", example="Certificate")
     unit: str = Field(..., example="USD")
 
 class GiftUpdate(BaseModel):
@@ -79,13 +78,15 @@ class GiftOut(BaseModel):
     Unit: str
     PaymentID: Optional[int]
 
-    class Config:
-        orm_mode = True
+    model_config = {
+        "from_attributes": True
+    }
 
 class CourierCreate(BaseModel):
     name: str
     country: Optional[str] = None
     price: Decimal
+
 class CourierUpdate(BaseModel):
     name: Optional[str] = None
     country: Optional[str] = None
@@ -98,8 +99,9 @@ class CourierOut(BaseModel):
     Price: Optional[Decimal]
     OrderID: int
 
-    class Config:
-        orm_mode = True
+    model_config = {
+        "from_attributes": True
+    }
 
 class OrderDetailCreate(BaseModel):
     product_id: int
@@ -115,8 +117,9 @@ class OrderDetailOut(BaseModel):
     ProductID: int
     Quantity: int
 
-    class Config:
-        orm_mode = True
+    model_config = {
+        "from_attributes": True
+    }
 
 class ProductCreateUpdate(BaseModel):
     name: str
@@ -128,8 +131,9 @@ class ProductOut(BaseModel):
     Price: Decimal
     SupplierID: Optional[int]
 
-    class Config:
-        orm_mode = True
+    model_config = {
+        "from_attributes": True
+    }
 
 class SupplierCreateUpdate(BaseModel):
     supplier_name: str
@@ -143,8 +147,9 @@ class SupplierOut(BaseModel):
     Phone: Optional[str]
     DeliveryDate: Optional[datetime]
 
-    class Config:
-        orm_mode = True
+    model_config = {
+        "from_attributes": True
+    }
 
 # ----------------------
 # Helper functions
