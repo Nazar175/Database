@@ -6,5 +6,6 @@
 ### Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned
 ### venv/Scripts/activate
 ### uvicorn main:app --reload
-### Для запуску тестів: py -m pytest -v
 ### http://127.0.0.1:8000/docs#/
+### Для запуску тестів: py -m pytest -v
+
