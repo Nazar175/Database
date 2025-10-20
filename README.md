@@ -7,5 +7,5 @@
 ### venv/Scripts/activate
 ### uvicorn main:app --reload
 ### http://127.0.0.1:8000/docs#/
-### Для запуску тестів: py -m pytest -v
-
+### Для запуску тестів: cd Shop_db
+### py -m pytest -v test_api.py

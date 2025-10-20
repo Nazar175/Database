@@ -151,6 +151,29 @@ class SupplierOut(BaseModel):
         "from_attributes": True
     }
 
+class CustomerCreate(BaseModel):
+    name: str = Field(..., example="John Doe")
+    email: str = Field(..., example="john@example.com")
+    phone: Optional[str] = Field(None, example="+380991234567")
+    country: Optional[str] = Field(None, example="Ukraine")
+
+class CustomerUpdate(BaseModel):
+    name: Optional[str] = None
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    country: Optional[str] = None
+
+class CustomerOut(BaseModel):
+    CustomerID: int
+    Name: str
+    Email: str
+    Phone: Optional[str]
+    Country: Optional[str]
+
+    model_config = {
+        "from_attributes": True
+    }
+
 # ----------------------
 # Helper functions
 # ----------------------
@@ -169,6 +192,47 @@ def get_customer_or_404(db: Session, customer_id: int):
 # ----------------------
 # Routes
 # ----------------------
+# 0) /customer/{customer_id}
+@app.get("/customer/{customer_id}", response_model=CustomerOut)
+def get_customer(customer_id: int, db: Session = Depends(get_db)):
+    customer = crud.get_customer(db, customer_id)
+    if not customer:
+        raise HTTPException(status_code=404, detail=f"Customer {customer_id} not found")
+    return customer
+
+
+@app.post("/customer", response_model=CustomerOut, status_code=201)
+def create_customer(payload: CustomerCreate, db: Session = Depends(get_db)):
+    customer = crud.create_customer(
+        db,
+        name=payload.name,
+        email=payload.email,
+        phone=payload.phone,
+        country=payload.country
+    )
+    return customer
+
+
+@app.put("/customer/{customer_id}", response_model=CustomerOut)
+def update_customer(customer_id: int, payload: CustomerUpdate, db: Session = Depends(get_db)):
+    customer = crud.update_customer(
+        db,
+        customer_id,
+        Name=payload.name,
+        Email=payload.email,
+        Phone=payload.phone,
+        Country=payload.country
+    )
+    if not customer:
+        raise HTTPException(status_code=404, detail=f"Customer {customer_id} not found")
+    return customer
+
+@app.delete("/customer/{customer_id}", response_model=CustomerOut)
+def delete_customer(customer_id: int, db: Session = Depends(get_db)):
+    customer = crud.delete_customer(db, customer_id)
+    if not customer:
+        raise HTTPException(status_code=404, detail=f"Customer {customer_id} not found")
+    return customer
 # 1) /customer/{customer_id}/orders
 @app.get("/customer/{customer_id}/orders", response_model=List[OrderOut])
 def list_customer_orders(customer_id: int = Path(..., gt=0), db: Session = Depends(get_db)):
