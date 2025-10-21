@@ -2,15 +2,21 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from database import get_db
 import crud, models
-from pydantic import BaseModel, constr, condecimal
+from pydantic import BaseModel, constr, condecimal, Field
 from typing import List
 
 router = APIRouter()
 
 class ProductBase(BaseModel):
-    productName: constr(min_length=2, max_length=100)
-    price: condecimal(gt=0)
-    supplierID: int | None = None
+    productName: constr(min_length=2, max_length=100) = Field(..., alias="ProductName")
+    price: condecimal(gt=0) = Field(..., alias="Price")
+    supplierID: int | None = Field(None, alias="SupplierID")
+
+    model_config = {
+        "from_attributes": True,
+        "populate_by_name": True,
+        "validate_by_name": True,
+    }
 
 
 class ProductUpdate(BaseModel):
@@ -33,9 +39,9 @@ def read_product(product_id: int, db: Session = Depends(get_db)):
 
 @router.post("/product", response_model=ProductBase)
 def create_product(product: ProductBase, db: Session = Depends(get_db)):
-    if product.SupplierID and not crud.get_supplier(db, product.SupplierID):
+    if product.supplierID and not crud.get_supplier(db, product.supplierID):
         raise HTTPException(status_code=404, detail="Supplier not found")
-    return crud.create_product(db, product.ProductName, product.Price, product.SupplierID)
+    return crud.create_product(db, product.productName, product.price, product.supplierID)
 
 
 @router.put("/product/{product_id}", response_model=ProductBase)
@@ -77,7 +83,7 @@ def create_product_for_order_detail(customer_id: int, order_id: int, detail_id: 
         raise HTTPException(status_code=404, detail="Customer, Order, or OrderDetail not found")
     if order.CustomerID != customer_id or detail.OrderID != order_id:
         raise HTTPException(status_code=400, detail="Mismatched Customer, Order, or OrderDetail")
-    new_product = crud.create_product(db, product.ProductName, product.Price, product.SupplierID)
+    new_product = crud.create_product(db, product.productName, product.price, product.supplierID)
     crud.update_order_detail(db, detail_id, ProductID=new_product.ProductID)
     return new_product
 

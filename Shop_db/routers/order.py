@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from database import get_db
 import crud, models
-from pydantic import BaseModel, constr
+from pydantic import BaseModel, constr, Field
 from typing import List
 from datetime import datetime
 
@@ -10,9 +10,15 @@ router = APIRouter()
 
 # ---------- SCHEMAS ----------
 class OrderBase(BaseModel):
-    orderDate: datetime
-    shippingAddress: constr(min_length=5, max_length=200)
-    status: str = "Pending"
+    orderDate: datetime = Field(..., alias="OrderDate")
+    shippingAddress: constr(min_length=5, max_length=200) = Field(..., alias="ShippingAddress")
+    status: str = Field("Pending", alias="Status")
+
+    model_config = {
+        "from_attributes": True,
+        "populate_by_name": True,
+        "validate_by_name": True,
+    }
 
 
 class OrderCreate(OrderBase):
@@ -45,10 +51,10 @@ def create_order(order: OrderCreate, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Customer not found")
     return crud.create_order(
         db,
-        order_date=order.OrderDate,
+        order_date=order.orderDate,
         customer_id=order.CustomerID,
-        shipping_address=order.ShippingAddress,
-        status=order.Status,
+        shipping_address=order.shippingAddress,
+        status=order.status,
     )
 
 
@@ -83,10 +89,10 @@ def create_order_for_customer(customer_id: int, order: OrderCreate, db: Session 
         raise HTTPException(status_code=404, detail="Customer not found")
     return crud.create_order(
         db,
-        order_date=order.OrderDate,
+        order_date=order.orderDate,
         customer_id=customer_id,
-        shipping_address=order.ShippingAddress,
-        status=order.Status,
+        shipping_address=order.shippingAddress,
+        status=order.status,
     )
 
 @router.put("/customer/{customer_id}/orders/{order_id}", response_model=OrderBase)

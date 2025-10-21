@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from database import get_db
 import crud, models
-from pydantic import BaseModel, condecimal, constr
+from pydantic import BaseModel, condecimal, constr, Field
 from datetime import datetime
 from typing import List
 
@@ -10,11 +10,17 @@ router = APIRouter()
 
 # ---------- SCHEMAS ----------
 class GiftBase(BaseModel):
-    amount: condecimal(gt=0)
-    exparesDate: datetime
-    type: str
-    unit: str
-    paymentID: int | None = None
+    amount: condecimal(gt=0) = Field(..., alias="Amount")
+    exparesDate: datetime = Field(..., alias="ExparesDate")
+    type: str = Field(..., alias="Type")
+    unit: str = Field(..., alias="Unit")
+    paymentID: int | None = Field(None, alias="PaymentID")
+
+    model_config = {
+        "from_attributes": True,
+        "populate_by_name": True,
+        "validate_by_name": True,
+    }
 
 
 class GiftUpdate(BaseModel):
@@ -40,15 +46,15 @@ def read_gift(gift_id: int, db: Session = Depends(get_db)):
 
 @router.post("/gift", response_model=GiftBase)
 def create_gift(gift: GiftBase, db: Session = Depends(get_db)):
-    if gift.PaymentID and not crud.get_payment(db, gift.PaymentID):
+    if gift.paymentID and not crud.get_payment(db, gift.paymentID):
         raise HTTPException(status_code=404, detail="Payment not found")
     return crud.create_gift(
         db,
-        amount=gift.Amount,
-        exp_date=gift.ExparesDate,
-        type_=gift.Type,
-        unit=gift.Unit,
-        payment_id=gift.PaymentID,
+        amount=gift.amount,
+        exp_date=gift.exparesDate,
+        type_=gift.type,
+        unit=gift.unit,
+        payment_id=gift.paymentID,
     )
 
 
@@ -88,10 +94,10 @@ def create_gift_for_payment(customer_id: int, order_id: int, payment_id: int, gi
         raise HTTPException(status_code=404, detail="Payment not found for this order")
     return crud.create_gift(
         db,
-        amount=gift.Amount,
-        exp_date=gift.ExparesDate,
-        type_=gift.Type,
-        unit=gift.Unit,
+        amount=gift.amount,
+        exp_date=gift.exparesDate,
+        type_=gift.type,
+        unit=gift.unit,
         payment_id=payment_id,
     )
 

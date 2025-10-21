@@ -2,16 +2,22 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from database import get_db
 import crud, models
-from pydantic import BaseModel, constr, condecimal
+from pydantic import BaseModel, constr, condecimal, Field
 from typing import List
 
 router = APIRouter()
 
 class CourierBase(BaseModel):
-    name: constr(min_length=2, max_length=100)
-    country: constr(min_length=2, max_length=50)
-    price: condecimal(gt=0)
-    orderID: int
+    name: constr(min_length=2, max_length=100) = Field(..., alias="Name")
+    country: constr(min_length=2, max_length=50) = Field(..., alias="Country")
+    price: condecimal(gt=0) = Field(..., alias="Price")
+    orderID: int = Field(..., alias="OrderID")
+
+    model_config = {
+        "from_attributes": True,
+        "populate_by_name": True,
+        "validate_by_name": True,
+    }
 
 class CourierUpdate(BaseModel):
     name: str | None = None
@@ -34,10 +40,10 @@ def read_courier(courier_id: int, db: Session = Depends(get_db)):
 
 @router.post("/courier", response_model=CourierBase)
 def create_courier(courier: CourierBase, db: Session = Depends(get_db)):
-    order = crud.get_order(db, courier.OrderID)
+    order = crud.get_order(db, courier.orderID)
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
-    return crud.create_courier(db, courier.Name, courier.Country, courier.Price, courier.OrderID)
+    return crud.create_courier(db, courier.name, courier.country, courier.price, courier.orderID)
 
 
 @router.put("/courier/{courier_id}", response_model=CourierBase)
@@ -71,7 +77,7 @@ def create_courier_for_order(customer_id: int, order_id: int, courier: CourierBa
     order = crud.get_order(db, order_id)
     if not order or order.CustomerID != customer_id:
         raise HTTPException(status_code=404, detail="Order not found for this customer")
-    return crud.create_courier(db, courier.Name, courier.Country, courier.Price, order_id)
+    return crud.create_courier(db, courier.name, courier.country, courier.price, order_id)
 
 @router.put("/customer/{customer_id}/orders/{order_id}/courier", response_model=CourierBase)
 def update_courier_for_order(customer_id: int, order_id: int, courier: CourierUpdate, db: Session = Depends(get_db)):
@@ -94,6 +100,3 @@ def delete_courier_for_order(customer_id: int, order_id: int, db: Session = Depe
     if not crud.delete_courier(db, courier_record.ID):
         raise HTTPException(status_code=404, detail="Courier not found")
     return {"message": "Courier deleted successfully"}
-
-    raise HTTPException(status_code=404, detail="Payment not found for this order")
-    return payment
