@@ -17,9 +17,10 @@ class SupplierBase(BaseModel):
     Phone: str | None = None
     DeliveryDate: datetime | None = Field(None, alias="deliveryDate")
 
-    class Config:
-        orm_mode = True
-        allow_population_by_field_name = True
+    model_config = {
+        "from_attributes": True,
+        "validate_by_name": True
+    }
 
 
 class SupplierCreate(SupplierBase):
@@ -32,9 +33,10 @@ class SupplierUpdate(BaseModel):
     Phone: str | None = None
     DeliveryDate: datetime | None = Field(None, alias="deliveryDate")
 
-    class Config:
-        allow_population_by_field_name = True
-
+model_config = {
+    "from_attributes": True,
+    "validate_by_name": True
+}
 
 # ---------- ROUTES ----------
 @router.get("/supplier", response_model=List[SupplierBase])
