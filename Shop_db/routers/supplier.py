@@ -9,6 +9,17 @@ from typing import List
 router = APIRouter()
 
 
+def _map_supplier_fields_to_crud(data: dict) -> dict:
+    mapping = {
+        "SupplierName": "supplier_name",
+        "Address": "address",
+        "Phone": "phone",
+        "DeliveryDate": "delivery_date",
+    }
+    return {new_key: data[old_key] for old_key, new_key in mapping.items()
+            if old_key in data and data[old_key] is not None}
+
+
 # ---------- SCHEMAS ----------
 class SupplierBase(BaseModel):
     SupplierID: int | None = None
@@ -54,7 +65,10 @@ def read_supplier(supplier_id: int, db: Session = Depends(get_db)):
 
 @router.post("/supplier", response_model=SupplierBase)
 def create_supplier(supplier: SupplierCreate, db: Session = Depends(get_db)):
-    new_supplier = crud.create_supplier(db, **supplier.dict(by_alias=True))
+    supplier_data = supplier.dict(by_alias=False, exclude_unset=True)
+    supplier_data.pop("SupplierID", None)
+    crud_kwargs = _map_supplier_fields_to_crud(supplier_data)
+    new_supplier = crud.create_supplier(db, **crud_kwargs)
     db.commit()
     db.refresh(new_supplier)
     return new_supplier
@@ -65,7 +79,9 @@ def update_supplier(supplier_id: int, supplier: SupplierUpdate, db: Session = De
     db_supplier = crud.get_supplier(db, supplier_id)
     if not db_supplier:
         raise HTTPException(status_code=404, detail="Supplier not found")
-    return crud.update_supplier(db, supplier_id, **supplier.dict(exclude_unset=True, by_alias=True))
+    update_data = supplier.dict(by_alias=False, exclude_unset=True)
+    crud_kwargs = _map_supplier_fields_to_crud(update_data)
+    return crud.update_supplier(db, supplier_id, **crud_kwargs)
 
 
 @router.delete("/supplier/{supplier_id}")
@@ -102,13 +118,10 @@ def create_supplier_for_product(customer_id: int, order_id: int, detail_id: int,
         raise HTTPException(status_code=404, detail="Resource not found")
     if order.CustomerID != customer.CustomerID or detail.OrderID != order.OrderID or detail.ProductID != product.ProductID:
         raise HTTPException(status_code=400, detail="Mismatched Customer, Order, OrderDetail, or Product")
-    new_supplier = crud.create_supplier(
-        db,
-        SupplierName=supplier.SupplierName,
-        Address=supplier.Address,
-        Phone=supplier.Phone,
-        DeliveryDate=supplier.DeliveryDate
-    )
+    supplier_data = supplier.dict(by_alias=False, exclude_unset=True)
+    supplier_data.pop("SupplierID", None)
+    crud_kwargs = _map_supplier_fields_to_crud(supplier_data)
+    new_supplier = crud.create_supplier(db, **crud_kwargs)
     product.SupplierID = new_supplier.SupplierID
     db.commit()
     db.refresh(new_supplier)
@@ -126,7 +139,9 @@ def update_supplier_for_product(customer_id: int, order_id: int, detail_id: int,
         raise HTTPException(status_code=404, detail="Resource not found")
     if order.CustomerID != customer.CustomerID or detail.OrderID != order.OrderID or detail.ProductID != product.ProductID or product.SupplierID != db_supplier.SupplierID:
         raise HTTPException(status_code=400, detail="Mismatched Customer, Order, OrderDetail, Product, or Supplier")
-    return crud.update_supplier(db, supplier_id, **supplier.dict(exclude_unset=True, by_alias=True))
+    update_data = supplier.dict(by_alias=False, exclude_unset=True)
+    crud_kwargs = _map_supplier_fields_to_crud(update_data)
+    return crud.update_supplier(db, supplier_id, **crud_kwargs)
 
 
 @router.delete("/customer/{customer_id}/orders/{order_id}/orderdetail/{detail_id}/product/{product_id}/supplier/{supplier_id}")
