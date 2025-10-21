@@ -1,0 +1,112 @@
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.orm import Session
+from database import get_db
+import crud, models
+from pydantic import BaseModel, condecimal, constr
+from datetime import datetime
+from typing import List
+
+router = APIRouter()
+
+# ---------- SCHEMAS ----------
+class PaymentBase(BaseModel):
+    OrderID: int
+    status: str
+    amount: condecimal(gt=0)
+    paymentDate: datetime
+
+
+class PaymentUpdate(BaseModel):
+    status: str | None = None
+    amount: float | None = None
+    paymentDate: datetime | None = None
+
+
+# ---------- ROUTES ----------
+@router.get("/payment", response_model=List[PaymentBase])
+def read_payments(db: Session = Depends(get_db)):
+    return crud.get_payments(db)
+
+
+@router.get("/payment/{payment_id}", response_model=PaymentBase)
+def read_payment(payment_id: int, db: Session = Depends(get_db)):
+    payment = crud.get_payment(db, payment_id)
+    if not payment:
+        raise HTTPException(status_code=404, detail="Payment not found")
+    return payment
+
+
+@router.post("/payment", response_model=PaymentBase)
+def create_payment(payment: PaymentBase, db: Session = Depends(get_db)):
+    order = crud.get_order(db, payment.OrderID)
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+    return crud.create_payment(
+        db,
+        order_id=payment.OrderID,
+        status=payment.Status,
+        amount=payment.Amount,
+        payment_date=payment.PaymentDate,
+    )
+
+
+@router.put("/payment/{payment_id}", response_model=PaymentBase)
+def update_payment(payment_id: int, payment: PaymentUpdate, db: Session = Depends(get_db)):
+    db_payment = crud.get_payment(db, payment_id)
+    if not db_payment:
+        raise HTTPException(status_code=404, detail="Payment not found")
+    return crud.update_payment(db, payment_id, **payment.dict(exclude_unset=True))
+
+
+@router.delete("/payment/{payment_id}")
+def delete_payment(payment_id: int, db: Session = Depends(get_db)):
+    if not crud.delete_payment(db, payment_id):
+        raise HTTPException(status_code=404, detail="Payment not found")
+    return {"message": "Payment deleted successfully"}
+
+
+# ---------- HIERARCHICAL ----------
+@router.get("/customer/{customer_id}/orders/{order_id}/payment")
+def get_payment_by_order(customer_id: int, order_id: int, db: Session = Depends(get_db)):
+    order = crud.get_order(db, order_id)
+    if not order or order.CustomerID != customer_id:
+        raise HTTPException(status_code=404, detail="Order not found for this customer")
+    payment = db.query(models.Payment).filter(models.Payment.OrderID == order_id).first()
+    if not payment:
+        raise HTTPException(status_code=404, detail="Payment not found for this order")
+    return payment
+
+@router.post("/customer/{customer_id}/orders/{order_id}/payment", response_model=PaymentBase)
+def create_payment_for_order(customer_id: int, order_id: int, payment: PaymentBase, db: Session = Depends(get_db)):
+    order = crud.get_order(db, order_id)
+    if not order or order.CustomerID != customer_id:
+        raise HTTPException(status_code=404, detail="Order not found for this customer")
+    return crud.create_payment(
+        db,
+        order_id=order_id,
+        status=payment.Status,
+        amount=payment.Amount,
+        payment_date=payment.PaymentDate,
+    )
+
+@router.put("/customer/{customer_id}/orders/{order_id}/payment", response_model=PaymentBase)
+def update_payment_for_order(customer_id: int, order_id: int, payment: PaymentUpdate, db: Session = Depends(get_db)):
+    order = crud.get_order(db, order_id)
+    if not order or order.CustomerID != customer_id:
+        raise HTTPException(status_code=404, detail="Order not found for this customer")
+    payment_record = db.query(models.Payment).filter(models.Payment.OrderID == order_id).first()
+    if not payment_record:
+        raise HTTPException(status_code=404, detail="Payment not found for this order")
+    return crud.update_payment(db, payment_record.PaymentID, **payment.dict(exclude_unset=True))
+
+@router.delete("/customer/{customer_id}/orders/{order_id}/payment")
+def delete_payment_for_order(customer_id: int, order_id: int, db: Session = Depends(get_db)):
+    order = crud.get_order(db, order_id)
+    if not order or order.CustomerID != customer_id:
+        raise HTTPException(status_code=404, detail="Order not found for this customer")
+    payment_record = db.query(models.Payment).filter(models.Payment.OrderID == order_id).first()
+    if not payment_record:
+        raise HTTPException(status_code=404, detail="Payment not found for this order")
+    if not crud.delete_payment(db, payment_record.PaymentID):
+        raise HTTPException(status_code=404, detail="Payment not found")
+    return {"message": "Payment deleted successfully"}
