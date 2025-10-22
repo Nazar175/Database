@@ -9,11 +9,13 @@ from typing import List
 router = APIRouter()
 
 # ---------- SCHEMAS ----------
-class PaymentBase(BaseModel):
+class Payment(BaseModel):
+    PaymentID: int | None = None
     OrderID: int = Field(..., alias="OrderID")
-    status: str = Field(..., alias="Status")
-    amount: condecimal(gt=0) = Field(..., alias="Amount")
-    paymentDate: datetime = Field(..., alias="PaymentDate")
+    Status: str = Field(..., alias="Status")
+    amount: condecimal(gt=0) = Field(..., alias="amount")
+    PaymentDate: datetime = Field(..., alias="PaymentDate")
+    PaymentMethod: str | None = Field(None, alias="PaymentMethod")
 
     model_config = {
         "from_attributes": True,
@@ -21,20 +23,13 @@ class PaymentBase(BaseModel):
         "validate_by_name": True,
     }
 
-
-class PaymentUpdate(BaseModel):
-    status: str | None = None
-    amount: float | None = None
-    paymentDate: datetime | None = None
-
-
 # ---------- ROUTES ----------
-@router.get("/payment", response_model=List[PaymentBase])
+@router.get("/payment", response_model=List[Payment])
 def read_payments(db: Session = Depends(get_db)):
     return crud.get_payments(db)
 
 
-@router.get("/payment/{payment_id}", response_model=PaymentBase)
+@router.get("/payment/{payment_id}", response_model=Payment)
 def read_payment(payment_id: int, db: Session = Depends(get_db)):
     payment = crud.get_payment(db, payment_id)
     if not payment:
@@ -42,22 +37,22 @@ def read_payment(payment_id: int, db: Session = Depends(get_db)):
     return payment
 
 
-@router.post("/payment", response_model=PaymentBase)
-def create_payment(payment: PaymentBase, db: Session = Depends(get_db)):
+@router.post("/payment", response_model=Payment)
+def create_payment(payment: Payment, db: Session = Depends(get_db)):
     order = crud.get_order(db, payment.OrderID)
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
     return crud.create_payment(
         db,
         order_id=payment.OrderID,
-        status=payment.status,
+        Status=payment.Status,
         amount=payment.amount,
-        payment_date=payment.paymentDate,
+        payment_date=payment.PaymentDate,
     )
 
 
-@router.put("/payment/{payment_id}", response_model=PaymentBase)
-def update_payment(payment_id: int, payment: PaymentUpdate, db: Session = Depends(get_db)):
+@router.put("/payment/{payment_id}", response_model=Payment)
+def update_payment(payment_id: int, payment: Payment, db: Session = Depends(get_db)):
     db_payment = crud.get_payment(db, payment_id)
     if not db_payment:
         raise HTTPException(status_code=404, detail="Payment not found")
@@ -82,8 +77,8 @@ def get_payment_by_order(customer_id: int, order_id: int, db: Session = Depends(
         raise HTTPException(status_code=404, detail="Payment not found for this order")
     return payment
 
-@router.post("/customer/{customer_id}/orders/{order_id}/payment", response_model=PaymentBase)
-def create_payment_for_order(customer_id: int, order_id: int, payment: PaymentBase, db: Session = Depends(get_db)):
+@router.post("/customer/{customer_id}/orders/{order_id}/payment", response_model=Payment)
+def create_payment_for_order(customer_id: int, order_id: int, payment: Payment, db: Session = Depends(get_db)):
     order = crud.get_order(db, order_id)
     if not order or order.CustomerID != customer_id:
         raise HTTPException(status_code=404, detail="Order not found for this customer")
@@ -92,11 +87,11 @@ def create_payment_for_order(customer_id: int, order_id: int, payment: PaymentBa
         order_id=order_id,
         status=payment.status,
         amount=payment.amount,
-        payment_date=payment.paymentDate,
+        payment_date=payment.PaymentDate,
     )
 
-@router.put("/customer/{customer_id}/orders/{order_id}/payment", response_model=PaymentBase)
-def update_payment_for_order(customer_id: int, order_id: int, payment: PaymentUpdate, db: Session = Depends(get_db)):
+@router.put("/customer/{customer_id}/orders/{order_id}/payment", response_model=Payment)
+def update_payment_for_order(customer_id: int, order_id: int, payment: Payment, db: Session = Depends(get_db)):
     order = crud.get_order(db, order_id)
     if not order or order.CustomerID != customer_id:
         raise HTTPException(status_code=404, detail="Order not found for this customer")

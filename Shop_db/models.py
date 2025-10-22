@@ -94,7 +94,7 @@ class Courier(Base):
     __tablename__ = "Courier"
 
     CourierID = Column(Integer, primary_key=True, index=True)
-    Name = Column(String(100), nullable=False)
+    CourierName = Column(String(100), nullable=False)
     Country = Column(String(50))
     Price = Column(DECIMAL(10, 2))
     OrderID = Column(Integer, ForeignKey("Orders.OrderID"), unique=True)
@@ -108,7 +108,7 @@ class Payment(Base):
     PaymentID = Column(Integer, primary_key=True, index=True)
     OrderID = Column(Integer, ForeignKey("Orders.OrderID"), unique=True)
     Status = Column(Enum(PaymentStatus), default=PaymentStatus.Pending)
-    Amount = Column(DECIMAL(10, 2), nullable=False)
+    amount = Column(DECIMAL(10, 2), nullable=False)
     PaymentDate = Column(DateTime)
 
     order = relationship("Orders", back_populates="payment")

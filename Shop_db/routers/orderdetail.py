@@ -7,21 +7,27 @@ from typing import List
 
 router = APIRouter()
 
-class OrderDetailBase(BaseModel):
-    OrderID: int
-    ProductID: int
-    quantity: int = 1
-
-class OrderDetailUpdate(BaseModel):
+# ---------- SCHEMAS ----------
+class OrderDetail(BaseModel):
+    OrderDetailID: int | None = None
+    OrderID: int | None = None
+    ProductID: int | None = None
     quantity: int | None = None
 
+    model_config = {
+        "from_attributes": True,
+        "populate_by_name": True,
+        "validate_by_name": True,
+    }
 
-@router.get("/orderdetail", response_model=List[OrderDetailBase])
+# ---------- ROUTES ----------
+
+@router.get("/orderdetail", response_model=List[OrderDetail])
 def read_details(db: Session = Depends(get_db)):
     return crud.get_order_details(db)
 
 
-@router.get("/orderdetail/{orderdetail_id}", response_model=OrderDetailBase)
+@router.get("/orderdetail/{orderdetail_id}", response_model=OrderDetail)
 def read_detail(orderdetail_id: int, db: Session = Depends(get_db)):
     detail = crud.get_order_detail(db, orderdetail_id)
     if not detail:
@@ -29,8 +35,8 @@ def read_detail(orderdetail_id: int, db: Session = Depends(get_db)):
     return detail
 
 
-@router.post("/orderdetail", response_model=OrderDetailBase)
-def create_detail(detail: OrderDetailBase, db: Session = Depends(get_db)):
+@router.post("/orderdetail", response_model=OrderDetail)
+def create_detail(detail: OrderDetail, db: Session = Depends(get_db)):
     order = crud.get_order(db, detail.OrderID)
     product = crud.get_product(db, detail.ProductID)
     if not order or not product:
@@ -38,8 +44,8 @@ def create_detail(detail: OrderDetailBase, db: Session = Depends(get_db)):
     return crud.create_order_detail(db, detail.OrderID, detail.ProductID, detail.Quantity)
 
 
-@router.put("/orderdetail/{orderdetail_id}", response_model=OrderDetailBase)
-def update_detail(orderdetail_id: int, detail: OrderDetailUpdate, db: Session = Depends(get_db)):
+@router.put("/orderdetail/{orderdetail_id}", response_model=OrderDetail)
+def update_detail(orderdetail_id: int, detail: OrderDetail, db: Session = Depends(get_db)):
     db_detail = crud.get_order_detail(db, orderdetail_id)
     if not db_detail:
         raise HTTPException(status_code=404, detail="OrderDetail not found")
@@ -62,8 +68,8 @@ def get_details_by_order(customer_id: int, order_id: int, db: Session = Depends(
         raise HTTPException(status_code=404, detail="Order not found for this customer")
     return [d for d in crud.get_order_details(db) if d.OrderID == order_id]
 
-@router.post("/customer/{customer_id}/orders/{order_id}/orderdetail", response_model=OrderDetailBase)
-def create_detail_for_order(customer_id: int, order_id: int, detail: OrderDetailBase, db: Session = Depends(get_db)):
+@router.post("/customer/{customer_id}/orders/{order_id}/orderdetail", response_model=OrderDetail)
+def create_detail_for_order(customer_id: int, order_id: int, detail: OrderDetail, db: Session = Depends(get_db)):
     customer = crud.get_customer(db, customer_id)
     order = crud.get_order(db, order_id)
     product = crud.get_product(db, detail.ProductID)
@@ -71,8 +77,8 @@ def create_detail_for_order(customer_id: int, order_id: int, detail: OrderDetail
         raise HTTPException(status_code=404, detail="Order or Product not found for this customer")
     return crud.create_order_detail(db, order_id, detail.ProductID, detail.Quantity)
 
-@router.put("/customer/{customer_id}/orders/{order_id}/orderdetail/{detail_id}", response_model=OrderDetailBase)
-def update_detail_for_order(customer_id: int, order_id: int, detail_id: int, detail: OrderDetailUpdate, db: Session = Depends(get_db)):
+@router.put("/customer/{customer_id}/orders/{order_id}/orderdetail/{detail_id}", response_model=OrderDetail)
+def update_detail_for_order(customer_id: int, order_id: int, detail_id: int, detail: OrderDetail, db: Session = Depends(get_db)):
     customer = crud.get_customer(db, customer_id)
     order = crud.get_order(db, order_id)
     db_detail = crud.get_order_detail(db, detail_id)

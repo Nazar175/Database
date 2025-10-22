@@ -2,8 +2,8 @@ from sqlalchemy.orm import Session
 import models
 
 # ---------- CUSTOMER ----------
-def create_customer(db: Session, name: str, email: str, phone: str = None, country: str = None):
-    customer = models.Customer(Name=name, Email=email, Phone=phone, Country=country)
+def create_customer(db: Session, Name: str, Email: str, Phone: str = None, Country: str = None):
+    customer = models.Customer(Name=Name, Email=Email, Phone=Phone, Country=Country)
     db.add(customer)
     db.commit()
     db.refresh(customer)
@@ -68,8 +68,8 @@ def delete_supplier(db: Session, supplier_id: int):
 
 
 # ---------- PRODUCT ----------
-def create_product(db: Session, name: str, price: float, supplier_id: int = None):
-    product = models.Product(ProductName=name, Price=price, SupplierID=supplier_id)
+def create_product(db: Session, name: str, Price: float, supplier_id: int = None):
+    product = models.Product(ProductName=name, Price=Price, SupplierID=supplier_id)
     db.add(product)
     db.commit()
     db.refresh(product)
@@ -101,8 +101,8 @@ def delete_product(db: Session, product_id: int):
 
 
 # ---------- ORDERS ----------
-def create_order(db: Session, order_date, customer_id: int, shipping_address: str, status: str = "Pending"):
-    order = models.Orders(OrderDate=order_date, CustomerID=customer_id, ShippingAddress=shipping_address, Status=status)
+def create_order(db: Session, order_date, customer_id: int, shipping_address: str, Status: str = "Pending"):
+    order = models.Orders(OrderDate=order_date, CustomerID=customer_id, ShippingAddress=shipping_address, Status=Status)
     db.add(order)
     db.commit()
     db.refresh(order)
@@ -167,12 +167,18 @@ def delete_order_detail(db: Session, detail_id: int):
 
 
 # ---------- COURIER ----------
-def create_courier(db: Session, name: str, country: str, price: float, order_id: int):
-    courier = models.Courier(Name=name, Country=country, Price=price, OrderID=order_id)
-    db.add(courier)
+def create_courier(db: Session, courier_name: str, country: str = None, price: float = None, order_id: int = None):
+    db_courier = models.Courier(
+        CourierName=courier_name,
+        Country=country,
+        Price=price,
+        OrderID=order_id
+    )
+    db.add(db_courier)
     db.commit()
-    db.refresh(courier)
-    return courier
+    db.refresh(db_courier)
+    return db_courier
+
 
 def get_couriers(db: Session):
     return db.query(models.Courier).all()
@@ -200,8 +206,8 @@ def delete_courier(db: Session, courier_id: int):
 
 
 # ---------- PAYMENT ----------
-def create_payment(db: Session, order_id: int, status: str, amount: float, payment_date):
-    payment = models.Payment(OrderID=order_id, Status=status, Amount=amount, PaymentDate=payment_date)
+def create_payment(db: Session, order_id: int, Status: str, amount: float, payment_date):
+    payment = models.Payment(OrderID=order_id, Status=Status, Amount=amount, PaymentDate=payment_date)
     db.add(payment)
     db.commit()
     db.refresh(payment)

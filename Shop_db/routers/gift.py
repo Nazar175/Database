@@ -9,11 +9,12 @@ from typing import List
 router = APIRouter()
 
 # ---------- SCHEMAS ----------
-class GiftBase(BaseModel):
-    amount: condecimal(gt=0) = Field(..., alias="Amount")
-    exparesDate: datetime = Field(..., alias="ExparesDate")
-    type: str = Field(..., alias="Type")
-    unit: str = Field(..., alias="Unit")
+class Gift(BaseModel):
+    GiftID: int | None = None
+    amount: condecimal(gt=0) | None = Field(None, alias="Amount")
+    exparesDate: datetime | None = Field(None, alias="ExparesDate")
+    type: str | None = Field(None, alias="Type")
+    unit: str | None = Field(None, alias="Unit")
     paymentID: int | None = Field(None, alias="PaymentID")
 
     model_config = {
@@ -22,21 +23,13 @@ class GiftBase(BaseModel):
         "validate_by_name": True,
     }
 
-
-class GiftUpdate(BaseModel):
-    amount: float | None = None
-    exparesDate: datetime | None = None
-    type: str | None = None
-    unit: str | None = None
-
-
 # ---------- ROUTES ----------
-@router.get("/gift", response_model=List[GiftBase])
+@router.get("/gift", response_model=List[Gift])
 def read_gifts(db: Session = Depends(get_db)):
     return crud.get_gifts(db)
 
 
-@router.get("/gift/{gift_id}", response_model=GiftBase)
+@router.get("/gift/{gift_id}", response_model=Gift)
 def read_gift(gift_id: int, db: Session = Depends(get_db)):
     gift = crud.get_gift(db, gift_id)
     if not gift:
@@ -44,8 +37,8 @@ def read_gift(gift_id: int, db: Session = Depends(get_db)):
     return gift
 
 
-@router.post("/gift", response_model=GiftBase)
-def create_gift(gift: GiftBase, db: Session = Depends(get_db)):
+@router.post("/gift", response_model=Gift)
+def create_gift(gift: Gift, db: Session = Depends(get_db)):
     if gift.paymentID and not crud.get_payment(db, gift.paymentID):
         raise HTTPException(status_code=404, detail="Payment not found")
     return crud.create_gift(
@@ -58,8 +51,8 @@ def create_gift(gift: GiftBase, db: Session = Depends(get_db)):
     )
 
 
-@router.put("/gift/{gift_id}", response_model=GiftBase)
-def update_gift(gift_id: int, gift: GiftUpdate, db: Session = Depends(get_db)):
+@router.put("/gift/{gift_id}", response_model=Gift)
+def update_gift(gift_id: int, gift: Gift, db: Session = Depends(get_db)):
     db_gift = crud.get_gift(db, gift_id)
     if not db_gift:
         raise HTTPException(status_code=404, detail="Gift not found")
@@ -84,8 +77,8 @@ def get_gifts_by_payment(customer_id: int, order_id: int, payment_id: int, db: S
         raise HTTPException(status_code=404, detail="Payment not found for this order")
     return [g for g in crud.get_gifts(db) if g.PaymentID == payment_id]
 
-@router.post("/customer/{customer_id}/orders/{order_id}/payment/{payment_id}/gift", response_model=GiftBase)
-def create_gift_for_payment(customer_id: int, order_id: int, payment_id: int, gift: GiftBase, db: Session = Depends(get_db)):
+@router.post("/customer/{customer_id}/orders/{order_id}/payment/{payment_id}/gift", response_model=Gift)
+def create_gift_for_payment(customer_id: int, order_id: int, payment_id: int, gift: Gift, db: Session = Depends(get_db)):
     order = crud.get_order(db, order_id)
     if not order or order.CustomerID != customer_id:
         raise HTTPException(status_code=404, detail="Order not found for this customer")
@@ -101,8 +94,8 @@ def create_gift_for_payment(customer_id: int, order_id: int, payment_id: int, gi
         payment_id=payment_id,
     )
 
-@router.put("/customer/{customer_id}/orders/{order_id}/payment/{payment_id}/gift/{gift_id}", response_model=GiftBase)
-def update_gift_for_payment(customer_id: int, order_id: int, payment_id: int, gift_id: int, gift: GiftUpdate, db: Session = Depends(get_db)):
+@router.put("/customer/{customer_id}/orders/{order_id}/payment/{payment_id}/gift/{gift_id}", response_model=Gift)
+def update_gift_for_payment(customer_id: int, order_id: int, payment_id: int, gift_id: int, gift: Gift, db: Session = Depends(get_db)):
     order = crud.get_order(db, order_id)
     if not order or order.CustomerID != customer_id:
         raise HTTPException(status_code=404, detail="Order not found for this customer")

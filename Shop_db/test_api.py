@@ -2,27 +2,40 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import StaticPool
 from database import Base, get_db
 from main import app
 
-# ---------- In-memory SQLite ----------
+# ---------- In-memory SQLite з StaticPool ----------
 SQLALCHEMY_DATABASE_URL = "sqlite:///:memory:"
-engine = create_engine(SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False})
-TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
+engine = create_engine(
+    SQLALCHEMY_DATABASE_URL,
+    connect_args={"check_same_thread": False},
+    poolclass=StaticPool
+)
+
+TestingSessionLocal = sessionmaker(
+    autocommit=False,
+    autoflush=False,
+    bind=engine
+)
+
+Base.metadata.create_all(bind=engine)
 
 # ---------- Fixtures ----------
 @pytest.fixture(scope="function")
 def db_session():
-    Base.metadata.create_all(bind=engine)
+    """Фікстура для надання сесії SQLAlchemy"""
     session = TestingSessionLocal()
     try:
         yield session
     finally:
         session.close()
-        Base.metadata.drop_all(bind=engine)
 
 @pytest.fixture(scope="function")
 def client(db_session):
+    """Фікстура для TestClient з оверрайдом get_db"""
     def override_get_db():
         try:
             yield db_session
@@ -42,7 +55,7 @@ def test_customer_crud(client):
     response = client.post("/customer", json={
         "Name": "John Doe",
         "Email": "john@example.com",
-        "Phone": "1234567",
+        "Phone": "344-678-2578",
         "Country": "USA"
     })
     assert response.status_code == 200
@@ -68,9 +81,10 @@ def test_customer_crud(client):
 # ======================================================
 def test_supplier_crud(client):
     response = client.post("/supplier", json={
-        "supplierName": "ACME Corp",
+        "SupplierName": "Dogdans",
         "Address": "Main St",
-        "Phone": "555-555"
+        "Phone": "555-55-3156",
+        "DeliveryDate": "2025-12-31"
     })
     assert response.status_code == 200
     supplier = response.json()
@@ -79,9 +93,9 @@ def test_supplier_crud(client):
     assert client.get("/supplier").status_code == 200
     assert client.get(f"/supplier/{sid}").status_code == 200
 
-    r = client.put(f"/supplier/{sid}", json={"supplierName": "Updated Supplier"})
+    r = client.put(f"/supplier/{sid}", json={"SupplierName": "Updated Supplier"})
     assert r.status_code == 200
-    assert r.json()["supplierName"] == "Updated Supplier"
+    assert r.json()["SupplierName"] == "Updated Supplier"
 
     r = client.delete(f"/supplier/{sid}")
     assert r.status_code == 200
@@ -91,9 +105,9 @@ def test_supplier_crud(client):
 # ======================================================
 def test_product_crud(client):
     supplier = client.post("/supplier", json={
-        "supplierName": "Best Supplier",
+        "SupplierName": "Best Supplier",
         "Address": "Nowhere 1",
-        "Phone": "999"
+        "Phone": "423-523-2111"
     }).json()
 
     response = client.post("/product", json={
@@ -117,9 +131,10 @@ def test_product_crud(client):
 # ======================================================
 def test_courier_crud(client):
     response = client.post("/courier", json={
-        "CourierName": "DHL",
-        "Phone": "111222",
-        "VehicleNumber": "AA1234BB"
+        "Name": "DHL",
+        "Country": "Germany",
+        "Price": 25.5,
+        "OrderID": None
     })
     assert response.status_code == 200
     courier = response.json()
@@ -174,16 +189,19 @@ def test_order_crud(client):
 def test_payment_crud(client):
     customer = client.post("/customer", json={
         "Name": "PayUser",
-        "Email": "pay@mail.com",
-        "Phone": "888",
-        "Country": "UA"
+        "Email": "pay@gmail.com",
+        "Phone": "888-256-1239",
+        "Country": "UA",
+        "ShippingAddress": "Some Address"
+
     }).json()
 
     order = client.post("/order", json={
         "CustomerID": customer["CustomerID"],
         "CourierID": None,
         "OrderDate": "2025-10-22",
-        "TotalAmount": 200
+        "TotalAmount": 200,
+        "ShippingAddress": "Some Address"
     }).json()
 
     response = client.post("/payment", json={
@@ -192,17 +210,27 @@ def test_payment_crud(client):
         "PaymentDate": "2025-10-22",
         "PaymentMethod": "Card"
     })
+    response = client.post("/payment", json={
+    "OrderID": order["OrderID"],
+    "Amount": 200,
+    "PaymentDate": "2025-10-22",
+    "Status": "Pending"
+})
     assert response.status_code == 200
+
     pid = response.json()["PaymentID"]
 
-    assert client.get(f"/payment/{pid}").status_code == 200
-    r = client.put(f"/payment/{pid}", json={"Amount": 300})
-    assert r.status_code == 200
-    assert r.json()["Amount"] == 300
 
-    r = client.delete(f"/payment/{pid}")
-    assert r.status_code == 200
+    read_response = client.get(f"/payment/{pid}")
+    assert read_response.status_code == 200
 
+    update_response = client.put(f"/payment/{pid}", json={"Amount": 300})
+    assert update_response.status_code == 200
+
+    assert float(update_response.json()["Amount"]) == 300.0
+
+    delete_response = client.delete(f"/payment/{pid}")
+    assert delete_response.status_code == 200
 # ======================================================
 # ✅ GIFT TESTS
 # ======================================================
@@ -210,7 +238,8 @@ def test_gift_crud(client):
     response = client.post("/gift", json={
         "GiftName": "Bonus Mug",
         "GiftType": "Accessory",
-        "Price": 0
+        "Price": 0,
+        "Unit" : "USD"
     })
     assert response.status_code == 200
     gift = response.json()
