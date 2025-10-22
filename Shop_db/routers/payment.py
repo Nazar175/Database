@@ -11,11 +11,12 @@ router = APIRouter()
 # ---------- SCHEMAS ----------
 class Payment(BaseModel):
     PaymentID: int | None = None
-    OrderID: int = Field(..., alias="OrderID")
-    Status: str = Field(..., alias="Status")
-    amount: condecimal(gt=0) = Field(..., alias="amount")
-    PaymentDate: datetime = Field(..., alias="PaymentDate")
-    PaymentMethod: str | None = Field(None, alias="PaymentMethod")
+    OrderID: int | None = None
+    Status: str | None = None
+    amount: condecimal(gt=0) | None = None
+    PaymentDate: datetime | None = None
+    PaymentMethod: str | None = None
+
 
     model_config = {
         "from_attributes": True,
