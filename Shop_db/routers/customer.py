@@ -50,7 +50,8 @@ def create_customer(customer: Customer, db: Session = Depends(get_db)):
         Phone=customer.Phone,
         Country=customer.Country
     )
-    return CustomerRead.model_validate(new_customer).model_dump(exclude_none=False)
+    db.refresh(new_customer)  # переконайся, що ID присвоєно
+    return CustomerRead.model_validate(new_customer)  # повертаємо Pydantic-схему
 
 
 @router.put("/customer/{customer_id}", response_model=Customer)

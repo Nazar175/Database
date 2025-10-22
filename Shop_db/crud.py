@@ -207,7 +207,7 @@ def delete_courier(db: Session, courier_id: int):
 
 # ---------- PAYMENT ----------
 def create_payment(db: Session, order_id: int, Status: str, amount: float, payment_date):
-    payment = models.Payment(OrderID=order_id, Status=Status, Amount=amount, PaymentDate=payment_date)
+    payment = models.Payment(OrderID=order_id, Status=Status, amount=amount, PaymentDate=payment_date)
     db.add(payment)
     db.commit()
     db.refresh(payment)

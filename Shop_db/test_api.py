@@ -153,84 +153,93 @@ def test_courier_crud(client):
 # ✅ ORDER TESTS
 # ======================================================
 def test_order_crud(client):
+    # --- CREATE CUSTOMER ---
     customer = client.post("/customer", json={
         "Name": "Buyer",
         "Email": "buyer@mail.com",
         "Phone": "9999",
         "Country": "UK"
     }).json()
+    customer_id = customer.get("CustomerID")
 
-    courier = client.post("/courier", json={
-        "CourierName": "NovaPoshta",
-        "Phone": "444",
-        "VehicleNumber": "CC1234DD"
-    }).json()
-
+    # --- CREATE ORDER ---
     order = client.post("/order", json={
-        "CustomerID": customer["CustomerID"],
-        "CourierID": courier["CourierID"],
-        "OrderDate": "2025-10-22",
-        "TotalAmount": 500
-    })
+        "CustomerID": customer_id,
+        "OrderDate": "2025-10-22T00:00:00",
+        "ShippingAddress": "Some Address",
+        "Status": "Pending"
+})
+
     assert order.status_code == 200
-    oid = order.json()["OrderID"]
+    order_data = order.json()
+    order_id = order_data.get("OrderID")
 
-    assert client.get(f"/order/{oid}").status_code == 200
-    r = client.put(f"/order/{oid}", json={"TotalAmount": 700})
+    # --- READ ORDER ---
+    r = client.get(f"/order/{order_id}")
     assert r.status_code == 200
-    assert r.json()["TotalAmount"] == 700
+    assert r.json()["CustomerID"] == customer_id
 
-    r = client.delete(f"/order/{oid}")
+    # --- UPDATE ORDER ---
+    # оновлюємо лише дозволені поля
+    r = client.put(f"/order/{order_id}", json={"ShippingAddress": "Updated Address"})
     assert r.status_code == 200
+    assert r.json()["ShippingAddress"] == "Updated Address"
+
+    # --- DELETE ORDER ---
+    r = client.delete(f"/order/{order_id}")
+    assert r.status_code == 200
+    assert "message" in r.json()
+
 
 # ======================================================
 # ✅ PAYMENT TESTS
 # ======================================================
 def test_payment_crud(client):
+    # --- CREATE CUSTOMER ---
     customer = client.post("/customer", json={
         "Name": "PayUser",
         "Email": "pay@gmail.com",
         "Phone": "888-256-1239",
         "Country": "UA",
         "ShippingAddress": "Some Address"
-
     }).json()
+    customer_id = customer["CustomerID"]
 
+    # --- CREATE ORDER ---
     order = client.post("/order", json={
-        "CustomerID": customer["CustomerID"],
+        "CustomerID": customer_id,
         "CourierID": None,
         "OrderDate": "2025-10-22",
         "TotalAmount": 200,
         "ShippingAddress": "Some Address"
     }).json()
+    order_id = order["OrderID"]
 
-    response = client.post("/payment", json={
-        "OrderID": order["OrderID"],
-        "Amount": 200,
-        "PaymentDate": "2025-10-22",
-        "PaymentMethod": "Card"
-    })
-    response = client.post("/payment", json={
-    "OrderID": order["OrderID"],
-    "Amount": 200,
-    "PaymentDate": "2025-10-22",
-    "Status": "Pending"
-})
+    # --- CREATE PAYMENT ---
+    payment_data = {
+        "OrderID": order_id,
+        "amount": 200,                     # маленька літера
+        "PaymentDate": "2025-10-22T00:00:00",
+        "Status": "Pending"
+    }
+    response = client.post("/payment", json=payment_data)
     assert response.status_code == 200
-
     pid = response.json()["PaymentID"]
 
-
+    # --- READ PAYMENT ---
     read_response = client.get(f"/payment/{pid}")
     assert read_response.status_code == 200
 
-    update_response = client.put(f"/payment/{pid}", json={"Amount": 300})
+    # --- UPDATE PAYMENT ---
+    update_response = client.put(f"/payment/{pid}", json={"amount": 300})
     assert update_response.status_code == 200
+    assert float(update_response.json()["amount"]) == 300.0
 
-    assert float(update_response.json()["Amount"]) == 300.0
-
+    # --- DELETE PAYMENT ---
     delete_response = client.delete(f"/payment/{pid}")
     assert delete_response.status_code == 200
+
+
 # ======================================================
 # ✅ GIFT TESTS
 # ======================================================
