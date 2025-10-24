@@ -5,6 +5,8 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 from database import Base, get_db
 from main import app
+import random
+
 
 # ---------- In-memory SQLite з StaticPool ----------
 SQLALCHEMY_DATABASE_URL = "sqlite:///:memory:"
@@ -52,6 +54,7 @@ def client(db_session):
 # ======================================================
 def test_customer_crud(client):
     # CREATE
+    email = f"user{random.randint(1,10000)}@example.com"
     response = client.post("/customer", json={
         "Name": "John Doe",
         "Email": "john@example.com",
@@ -154,9 +157,10 @@ def test_courier_crud(client):
 # ======================================================
 def test_order_crud(client):
     # --- CREATE CUSTOMER ---
+    email = f"user{random.randint(1,10000)}@example.com"
     customer = client.post("/customer", json={
         "Name": "Buyer",
-        "Email": "buyer@mail.com",
+        "Email": email,
         "Phone": "9999",
         "Country": "UK"
     }).json()
@@ -164,11 +168,11 @@ def test_order_crud(client):
 
     # --- CREATE ORDER ---
     order = client.post("/order", json={
-        "CustomerID": customer_id,
-        "OrderDate": "2025-10-22T00:00:00",
-        "ShippingAddress": "Some Address",
-        "Status": "Pending"
-})
+        "orderDate": "2025-10-22T00:00:00",
+        "shippingAddress": "Some Address",
+        "Status": "Pending",
+        "CustomerID": customer_id
+    })
 
     assert order.status_code == 200
     order_data = order.json()
@@ -180,10 +184,9 @@ def test_order_crud(client):
     assert r.json()["CustomerID"] == customer_id
 
     # --- UPDATE ORDER ---
-    # оновлюємо лише дозволені поля
-    r = client.put(f"/order/{order_id}", json={"ShippingAddress": "Updated Address"})
+    r = client.put(f"/order/{order_id}", json={"shippingAddress": "Updated Address"})
     assert r.status_code == 200
-    assert r.json()["ShippingAddress"] == "Updated Address"
+    assert r.json()["shippingAddress"] == "Updated Address"
 
     # --- DELETE ORDER ---
     r = client.delete(f"/order/{order_id}")
@@ -196,6 +199,7 @@ def test_order_crud(client):
 # ======================================================
 def test_payment_crud(client):
     # --- CREATE CUSTOMER ---
+    email = f"user{random.randint(1,10000)}@example.com"
     customer = client.post("/customer", json={
         "Name": "PayUser",
         "Email": "pay@gmail.com",
@@ -218,7 +222,7 @@ def test_payment_crud(client):
     # --- CREATE PAYMENT ---
     payment_data = {
         "OrderID": order_id,
-        "amount": 200,                     # маленька літера
+        "amount": 200,
         "PaymentDate": "2025-10-22T00:00:00",
         "Status": "Pending"
     }
@@ -267,49 +271,70 @@ def test_gift_crud(client):
 # ✅ ORDERDETAIL TESTS
 # ======================================================
 def test_orderdetail_crud(client):
+    # --- CREATE CUSTOMER ---
+    email = f"user{random.randint(1,10000)}@example.com"
     customer = client.post("/customer", json={
         "Name": "DetailUser",
-        "Email": "d@mail.com",
+        "Email": email,
         "Phone": "333",
         "Country": "UA"
     }).json()
+    customer_id = customer.get("CustomerID")
+
+    # --- CREATE COURIER ---
     courier = client.post("/courier", json={
-        "CourierName": "Glovo",
+        "Name": "Glovo",
         "Phone": "777",
         "VehicleNumber": "EE5555FF"
     }).json()
+    courier_id = courier["CourierID"]
+
+    # --- CREATE ORDER ---
     order = client.post("/order", json={
-        "CustomerID": customer["CustomerID"],
-        "CourierID": courier["CourierID"],
-        "OrderDate": "2025-10-22",
-        "TotalAmount": 200
+        "CustomerID": customer_id,
+        "CourierID": courier_id,
+        "OrderDate": "2025-10-22T00:00:00",
+        "ShippingAddress": "Some Address",
+        "Status": "Pending"
     }).json()
+    order_id = order.get("OrderID")
+
+    # --- CREATE SUPPLIER ---
     supplier = client.post("/supplier", json={
-        "supplierName": "TestSupp",
+        "SupplierName": "TestSupp",
         "Address": "Main 2",
         "Phone": "000"
     }).json()
+    supplier_id = supplier["SupplierID"]
+
+    # --- CREATE PRODUCT ---
     product = client.post("/product", json={
         "ProductName": "Charger",
         "Price": 15.5,
-        "SupplierID": supplier["SupplierID"]
+        "SupplierID": supplier_id
     }).json()
+    product_id = product["ProductID"]
 
+    # --- CREATE ORDERDETAIL ---
     response = client.post("/orderdetail", json={
-        "OrderID": order["OrderID"],
-        "ProductID": product["ProductID"],
-        "Quantity": 2,
-        "UnitPrice": 15.5
+        "OrderID": order_id,
+        "ProductID": product_id,
+        "quantity": 2
     })
+
     assert response.status_code == 200
     od = response.json()
     odid = od["OrderDetailID"]
 
+    # --- READ ORDERDETAIL ---
     assert client.get(f"/orderdetail/{odid}").status_code == 200
-    r = client.put(f"/orderdetail/{odid}", json={"Quantity": 3})
-    assert r.status_code == 200
-    assert r.json()["Quantity"] == 3
 
+    # --- UPDATE ORDERDETAIL ---
+    r = client.put(f"/orderdetail/{odid}", json={"quantity": 3})
+    assert r.status_code == 200
+    assert r.json()["quantity"] == 3
+
+    # --- DELETE ORDERDETAIL ---
     r = client.delete(f"/orderdetail/{odid}")
     assert r.status_code == 200
 
