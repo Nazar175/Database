@@ -16,11 +16,10 @@ class Order(BaseModel):
     Status: str | None = Field("Pending", alias="Status")
     CustomerID: int | None = Field(None, alias="CustomerID")
 
-    model_config = {
-        "from_attributes": True,
-        "populate_by_name": True,
-        "validate_by_name": True,
-    }
+class Config:
+    orm_mode = True
+    allow_population_by_field_name = True
+
     
 # ---------- ROUTES ----------
 @router.get("/order", response_model=List[Order])
