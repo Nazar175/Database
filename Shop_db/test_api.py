@@ -7,6 +7,7 @@ from database import Base, get_db
 from main import app
 import random
 from datetime import datetime
+from routers.auth import get_current_user
 
 # ---------- In-memory SQLite ----------
 SQLALCHEMY_DATABASE_URL = "sqlite:///:memory:"
@@ -42,9 +43,16 @@ def client(db_session):
         finally:
             db_session.close()
 
+    from models import User
+    def override_get_current_user():
+        return User(id=1, username="testuser", email="test@example.com", password_hash="fakehash")
+
     app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_current_user] = override_get_current_user
+
     with TestClient(app) as c:
         yield c
+
     app.dependency_overrides.clear()
 
 # ======================================================
