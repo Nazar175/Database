@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from database import get_db
-import crud, models
+import crud
 from pydantic import BaseModel, constr
 from datetime import datetime
 from typing import List
@@ -25,25 +25,30 @@ def _map_supplier_fields_to_crud(data: dict) -> dict:
 
 
 # ---------- SCHEMAS ----------
-class Supplier(BaseModel):
-    SupplierID: int | None = None
-    SupplierName: constr(min_length=2, max_length=100) | None = None
+class SupplierBase(BaseModel):
+    SupplierName: constr(min_length=2, max_length=100)
     Address: str | None = None
     Phone: str | None = None
     DeliveryDate: datetime | None = None
 
-    model_config = {
-        "from_attributes": True,
-        "validate_by_name": True
-    }
+
+class SupplierCreate(SupplierBase):
+    pass
+
+
+class SupplierRead(SupplierBase):
+    SupplierID: int
+    model_config = {"from_attributes": True}
+
 
 # ---------- ROUTES ----------
-@router.get("/supplier", response_model=List[Supplier])
+
+@router.get("/supplier", response_model=List[SupplierRead])
 def read_suppliers(db: Session = Depends(get_db)):
     return crud.get_suppliers(db)
 
 
-@router.get("/supplier/{supplier_id}", response_model=Supplier)
+@router.get("/supplier/{supplier_id}", response_model=SupplierRead)
 def read_supplier(supplier_id: int, db: Session = Depends(get_db)):
     supplier = crud.get_supplier(db, supplier_id)
     if not supplier:
@@ -51,45 +56,31 @@ def read_supplier(supplier_id: int, db: Session = Depends(get_db)):
     return supplier
 
 
-@router.post("/supplier", response_model=Supplier)
-def create_supplier(supplier: Supplier, db: Session = Depends(get_db)):
-    data = supplier.dict(exclude_unset=True, by_alias=False)
-    data.pop("SupplierID", None)
-
-    crud_data = {
-        "supplier_name": data.get("SupplierName"),
-        "address": data.get("Address"),
-        "phone": data.get("Phone"),
-        "delivery_date": data.get("DeliveryDate"),
-    }
-
+@router.post("/supplier", response_model=SupplierRead)
+def create_supplier(supplier: SupplierCreate, db: Session = Depends(get_db)):
     new_supplier = crud.create_supplier(
-        db, **{k: v for k, v in crud_data.items() if v is not None}
+        db,
+        supplier_name=supplier.SupplierName,
+        address=supplier.Address,
+        phone=supplier.Phone,
+        delivery_date=supplier.DeliveryDate
     )
-    db.commit()
     db.refresh(new_supplier)
     return new_supplier
 
 
-@router.put("/supplier/{supplier_id}", response_model=Supplier)
-def update_supplier(supplier_id: int, supplier: Supplier, db: Session = Depends(get_db)):
+@router.put("/supplier/{supplier_id}", response_model=SupplierRead)
+def update_supplier(supplier_id: int, supplier: SupplierBase, db: Session = Depends(get_db)):
     db_supplier = crud.get_supplier(db, supplier_id)
     if not db_supplier:
         raise HTTPException(status_code=404, detail="Supplier not found")
 
-    data = supplier.dict(exclude_unset=True, by_alias=False)
-    data.pop("SupplierID", None)
+    update_data = supplier.model_dump(exclude_unset=True)
 
-    crud_data = {
-        "SupplierName": data.get("SupplierName"),
-        "Address": data.get("Address"),
-        "Phone": data.get("Phone"),
-        "DeliveryDate": data.get("DeliveryDate"),
-    }
+    updated = crud.update_supplier(db, supplier_id, **update_data)
 
-    return crud.update_supplier(
-        db, supplier_id, **{k: v for k, v in crud_data.items() if v is not None}
-    )
+    return SupplierRead.from_orm(updated)
+
 
 
 @router.delete("/supplier/{supplier_id}")
@@ -100,7 +91,11 @@ def delete_supplier(supplier_id: int, db: Session = Depends(get_db)):
 
 
 # ---------- HIERARCHICAL ----------
-@router.get("/customer/{customer_id}/orders/{order_id}/orderdetail/{detail_id}/product/{product_id}/supplier", response_model=Supplier)
+
+@router.get(
+    "/customer/{customer_id}/orders/{order_id}/orderdetail/{detail_id}/product/{product_id}/supplier",
+    response_model=SupplierRead,
+)
 def get_supplier_by_product(customer_id: int, order_id: int, detail_id: int, product_id: int, db: Session = Depends(get_db)):
     customer = crud.get_customer(db, customer_id)
     order = crud.get_order(db, order_id)
@@ -116,8 +111,11 @@ def get_supplier_by_product(customer_id: int, order_id: int, detail_id: int, pro
     return supplier
 
 
-@router.post("/customer/{customer_id}/orders/{order_id}/orderdetail/{detail_id}/product/{product_id}/supplier", response_model=Supplier)
-def create_supplier_for_product(customer_id: int, order_id: int, detail_id: int, product_id: int, supplier: Supplier, db: Session = Depends(get_db)):
+@router.post(
+    "/customer/{customer_id}/orders/{order_id}/orderdetail/{detail_id}/product/{product_id}/supplier",
+    response_model=SupplierRead,
+)
+def create_supplier_for_product(customer_id: int, order_id: int, detail_id: int, product_id: int, supplier: SupplierCreate, db: Session = Depends(get_db)):
     customer = crud.get_customer(db, customer_id)
     order = crud.get_order(db, order_id)
     detail = crud.get_order_detail(db, detail_id)
@@ -126,8 +124,8 @@ def create_supplier_for_product(customer_id: int, order_id: int, detail_id: int,
         raise HTTPException(status_code=404, detail="Resource not found")
     if order.CustomerID != customer.CustomerID or detail.OrderID != order.OrderID or detail.ProductID != product.ProductID:
         raise HTTPException(status_code=400, detail="Mismatched Customer, Order, OrderDetail, or Product")
-    supplier_data = supplier.dict(by_alias=False, exclude_unset=True)
-    supplier_data.pop("SupplierID", None)
+
+    supplier_data = supplier.dict(exclude_unset=True)
     crud_kwargs = _map_supplier_fields_to_crud(supplier_data)
     new_supplier = crud.create_supplier(db, **crud_kwargs)
     product.SupplierID = new_supplier.SupplierID
@@ -136,8 +134,11 @@ def create_supplier_for_product(customer_id: int, order_id: int, detail_id: int,
     return new_supplier
 
 
-@router.put("/customer/{customer_id}/orders/{order_id}/orderdetail/{detail_id}/product/{product_id}/supplier/{supplier_id}", response_model=Supplier)
-def update_supplier_for_product(customer_id: int, order_id: int, detail_id: int, product_id: int, supplier_id: int, supplier: Supplier, db: Session = Depends(get_db)):
+@router.put(
+    "/customer/{customer_id}/orders/{order_id}/orderdetail/{detail_id}/product/{product_id}/supplier/{supplier_id}",
+    response_model=SupplierRead,
+)
+def update_supplier_for_product(customer_id: int, order_id: int, detail_id: int, product_id: int, supplier_id: int, supplier: SupplierBase, db: Session = Depends(get_db)):
     customer = crud.get_customer(db, customer_id)
     order = crud.get_order(db, order_id)
     detail = crud.get_order_detail(db, detail_id)
@@ -147,12 +148,15 @@ def update_supplier_for_product(customer_id: int, order_id: int, detail_id: int,
         raise HTTPException(status_code=404, detail="Resource not found")
     if order.CustomerID != customer.CustomerID or detail.OrderID != order.OrderID or detail.ProductID != product.ProductID or product.SupplierID != db_supplier.SupplierID:
         raise HTTPException(status_code=400, detail="Mismatched Customer, Order, OrderDetail, Product, or Supplier")
-    update_data = supplier.dict(by_alias=False, exclude_unset=True)
+    update_data = supplier.dict(exclude_unset=True)
     crud_kwargs = _map_supplier_fields_to_crud(update_data)
-    return crud.update_supplier(db, supplier_id, **crud_kwargs)
+    updated = crud.update_supplier(db, supplier_id, **crud_kwargs)
+    return updated
 
 
-@router.delete("/customer/{customer_id}/orders/{order_id}/orderdetail/{detail_id}/product/{product_id}/supplier/{supplier_id}")
+@router.delete(
+    "/customer/{customer_id}/orders/{order_id}/orderdetail/{detail_id}/product/{product_id}/supplier/{supplier_id}"
+)
 def delete_supplier_for_product(customer_id: int, order_id: int, detail_id: int, product_id: int, supplier_id: int, db: Session = Depends(get_db)):
     customer = crud.get_customer(db, customer_id)
     order = crud.get_order(db, order_id)

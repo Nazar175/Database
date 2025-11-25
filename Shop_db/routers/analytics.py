@@ -1,50 +1,88 @@
+import random
+from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from sqlalchemy import text
+from sqlalchemy import func
 from database import get_db
+from models import OrderDetail, Product, Orders, Customer
 
 router = APIRouter(prefix="/analytics", tags=["Analytics"])
 
-@router.post("/create-random-order/{customer_id}")
-def create_random_order(customer_id: int, db: Session = Depends(get_db)):
-    try:
-        db.execute(text("CALL CreateRandomOrderForCustomer(:customer_id)"), {"customer_id": customer_id})
+def create_random_order_for_customer(db: Session, customer_id: int):
+    """Твоя існуюча функція без змін"""
+    order = Orders(
+        CustomerID=customer_id,
+        OrderDate=datetime.now(),
+        ShippingAddress=f"Address {random.randint(1,1000)}",
+        Status="Pending"
+    )
+    db.add(order)
+    db.commit()
+    db.refresh(order)
+
+    product = db.query(Product).order_by(func.random()).first()
+    if product:
+        order_detail = OrderDetail(
+            OrderID=order.OrderID,
+            ProductID=product.ProductID,
+            Quantity=random.randint(1, 5)
+        )
+        db.add(order_detail)
         db.commit()
+        db.refresh(order_detail)
 
-        order = db.execute(
-            text("""
-                SELECT o.OrderID, o.OrderDate, o.ShippingAddress, o.Status,
-                       c.Name AS CustomerName, c.Email AS CustomerEmail,
-                       cr.Name, cr.Country AS CourierCountry, cr.Price AS CourierPrice,
-                       pay.Amount AS PaymentAmount, pay.Status AS PaymentStatus, pay.PaymentDate
-                FROM Orders o
-                JOIN Customer c ON o.CustomerID = c.CustomerID
-                LEFT JOIN Courier cr ON o.OrderID = cr.OrderID
-                LEFT JOIN Payment pay ON o.OrderID = pay.OrderID
-                WHERE o.CustomerID = :customer_id
-                ORDER BY o.OrderID DESC
-                LIMIT 1
-            """),
-            {"customer_id": customer_id}
-        ).mappings().first()
+    return order
 
-        if not order:
-            raise HTTPException(status_code=404, detail="Order not created")
+@router.post("/create-random-order/{customer_id}")
+def create_random_order_endpoint(customer_id: int, db: Session = Depends(get_db)):
+    """Endpoint для тесту, який викликає твою функцію"""
+    customer = db.query(Customer).filter(Customer.CustomerID == customer_id).first()
+    if not customer:
+        raise HTTPException(status_code=404, detail="Customer not found")
 
-        return {
-            "message": "Random order created successfully ✅",
-            "order": dict(order)
+    order = create_random_order_for_customer(db, customer_id)
+    return {
+        "message": "Random order created successfully ✅",
+        "order": {
+            "OrderID": order.OrderID,
+            "CustomerID": order.CustomerID,
+            "CustomerName": customer.Name,
+            "CustomerEmail": customer.Email,
+            "OrderDate": order.OrderDate.isoformat(),
+            "Status": order.Status,
+            "ShippingAddress": order.ShippingAddress
         }
-
-    except Exception as e:
-        db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+    }
 
 
 @router.get("/orders-summary")
 def get_order_summary(db: Session = Depends(get_db)):
     try:
-        result = db.execute(text("SELECT * FROM v_OrderSummary")).mappings().all()
-        return {"order_summary": [dict(r) for r in result]}
+        results = (
+            db.query(
+                Orders.OrderID,
+                Orders.OrderDate,
+                Customer.Name.label("CustomerName"),
+                Orders.Status,
+                func.sum(OrderDetail.Quantity * Product.Price).label("total_amount")
+            )
+            .join(OrderDetail, OrderDetail.OrderID == Orders.OrderID)
+            .join(Product, Product.ProductID == OrderDetail.ProductID)
+            .join(Customer, Customer.CustomerID == Orders.CustomerID)
+            .group_by(Orders.OrderID, Orders.OrderDate, Customer.Name, Orders.Status)
+            .all()
+        )
+
+        summary = [
+            {
+                "OrderID": r.OrderID,
+                "OrderDate": r.OrderDate.isoformat(),
+                "CustomerName": r.CustomerName,
+                "Status": r.Status,
+                "total_amount": float(r.total_amount)
+            }
+            for r in results
+        ]
+        return {"order_summary": summary}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

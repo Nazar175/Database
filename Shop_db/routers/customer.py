@@ -29,8 +29,15 @@ class CustomerRead(BaseModel):
 
     model_config = {"from_attributes": True}
 
+class CustomerCreate(BaseModel):
+    Name: constr(min_length=2, max_length=100)
+    Email: EmailStr
+    Phone: constr(min_length=6, max_length=20) | None = None
+    Country: constr(min_length=2, max_length=50) | None = None
+
+
 # ---------- ROUTES ----------
-@router.get("/customer", response_model=List[Customer])
+@router.get("/customer", response_model=List[CustomerRead])
 def read_customers(db: Session = Depends(get_db)):
     return crud.get_customers(db)
 
@@ -42,7 +49,7 @@ def read_customer(customer_id: int, db: Session = Depends(get_db)):
     return customer
 
 @router.post("/customer", response_model=CustomerRead)
-def create_customer(customer: Customer, db: Session = Depends(get_db)):
+def create_customer(customer: CustomerCreate, db: Session = Depends(get_db)):
     new_customer = crud.create_customer(
         db,
         Name=customer.Name,
@@ -50,9 +57,8 @@ def create_customer(customer: Customer, db: Session = Depends(get_db)):
         Phone=customer.Phone,
         Country=customer.Country
     )
-    db.refresh(new_customer)  # переконайся, що ID присвоєно
-    return CustomerRead.model_validate(new_customer)  # повертаємо Pydantic-схему
-
+    db.refresh(new_customer)
+    return CustomerRead.model_validate(new_customer)
 
 @router.put("/customer/{customer_id}", response_model=Customer)
 def update_customer(customer_id: int, customer: Customer, db: Session = Depends(get_db)):
