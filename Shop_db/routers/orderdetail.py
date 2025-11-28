@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from database import get_db
 import crud, models
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import List
 
 router = APIRouter()
@@ -12,7 +12,7 @@ class OrderDetail(BaseModel):
     OrderDetailID: int | None = None
     OrderID: int | None = None
     ProductID: int | None = None
-    quantity: int | None = None
+    quantity: int | None = Field(None, alias="Quantity")
 
     model_config = {
         "from_attributes": True,
@@ -41,7 +41,7 @@ def create_detail(detail: OrderDetail, db: Session = Depends(get_db)):
     product = crud.get_product(db, detail.ProductID)
     if not order or not product:
         raise HTTPException(status_code=404, detail="Order or Product not found")
-    return crud.create_order_detail(db, detail.OrderID, detail.ProductID, detail.Quantity)
+    return crud.create_order_detail(db, detail.OrderID, detail.ProductID, detail.quantity)
 
 
 @router.put("/orderdetail/{orderdetail_id}", response_model=OrderDetail)
@@ -49,7 +49,7 @@ def update_detail(orderdetail_id: int, detail: OrderDetail, db: Session = Depend
     db_detail = crud.get_order_detail(db, orderdetail_id)
     if not db_detail:
         raise HTTPException(status_code=404, detail="OrderDetail not found")
-    return crud.update_order_detail(db, orderdetail_id, **detail.dict(exclude_unset=True))
+    return crud.update_order_detail(db, orderdetail_id, **detail.dict(by_alias=True, exclude_unset=True))
 
 
 @router.delete("/orderdetail/{orderdetail_id}")
