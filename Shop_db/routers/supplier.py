@@ -5,6 +5,7 @@ import crud
 from pydantic import BaseModel, constr
 from datetime import datetime
 from typing import List
+from .product import ProductRead
 
 router = APIRouter()
 
@@ -170,3 +171,14 @@ def delete_supplier_for_product(customer_id: int, order_id: int, detail_id: int,
     if not crud.delete_supplier(db, supplier_id):
         raise HTTPException(status_code=404, detail="Supplier not found")
     return {"message": "Supplier deleted successfully"}
+
+
+@router.get("/supplier/{supplier_id}/products", response_model=List[ProductRead])
+def get_products_by_supplier(supplier_id: int, db: Session = Depends(get_db)):
+
+    supplier = crud.get_supplier(db, supplier_id)
+    if not supplier:
+        raise HTTPException(status_code=404, detail="Supplier not found")
+
+    products = db.query(crud.models.Product).filter(crud.models.Product.SupplierID == supplier_id).all()
+    return products
