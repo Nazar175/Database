@@ -327,4 +327,5 @@ def test_order_summary_analytics(client):
         assert "OrderID" in row
         assert "CustomerName" in row
         assert "Status" in row
-        assert "OrderDate" in row
+        assert "OrderDate" in row   
+
