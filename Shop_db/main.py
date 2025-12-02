@@ -1,4 +1,4 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Depends
 from database import Base, engine
 from routers import (
     customer,
@@ -9,8 +9,10 @@ from routers import (
     courier,
     product,
     supplier,
-    analytics
+    analytics,
+    auth
 )
+from routers.auth import get_current_user
 
 Base.metadata.create_all(bind=engine)
 
@@ -20,16 +22,17 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# Підключення всіх роутерів
-app.include_router(customer.router, tags=["Customer"])
-app.include_router(order.router, tags=["Order"])
-app.include_router(orderdetail.router, tags=["Order Detail"])
-app.include_router(payment.router, tags=["Payment"])
-app.include_router(gift.router, tags=["Gift"])
-app.include_router(courier.router, tags=["Courier"])
-app.include_router(product.router, tags=["Product"])
-app.include_router(supplier.router, tags=["Supplier"])
-app.include_router(analytics.router, tags=["Analytics"])
+app.include_router(auth.router, tags=["Auth"])
+
+app.include_router(customer.router, tags=["Customer"], dependencies=[Depends(get_current_user)])
+app.include_router(order.router, tags=["Order"], dependencies=[Depends(get_current_user)])
+app.include_router(orderdetail.router, tags=["Order Detail"], dependencies=[Depends(get_current_user)])
+app.include_router(payment.router, tags=["Payment"], dependencies=[Depends(get_current_user)])
+app.include_router(gift.router, tags=["Gift"], dependencies=[Depends(get_current_user)])
+app.include_router(courier.router, tags=["Courier"], dependencies=[Depends(get_current_user)])
+app.include_router(product.router, tags=["Product"], dependencies=[Depends(get_current_user)])
+app.include_router(supplier.router, tags=["Supplier"], dependencies=[Depends(get_current_user)])
+app.include_router(analytics.router, tags=["Analytics"], dependencies=[Depends(get_current_user)])
 
 @app.get("/")
 def root():

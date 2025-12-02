@@ -16,11 +16,10 @@ class Order(BaseModel):
     Status: str | None = Field("Pending", alias="Status")
     CustomerID: int | None = Field(None, alias="CustomerID")
 
-    model_config = {
-        "from_attributes": True,
-        "populate_by_name": True,
-        "validate_by_name": True,
-    }
+class Config:
+    orm_mode = True
+    allow_population_by_field_name = True
+
     
 # ---------- ROUTES ----------
 @router.get("/order", response_model=List[Order])
@@ -55,7 +54,7 @@ def update_order(order_id: int, order: Order, db: Session = Depends(get_db)):
     db_order = crud.get_order(db, order_id)
     if not db_order:
         raise HTTPException(status_code=404, detail="Order not found")
-    return crud.update_order(db, order_id, **order.dict(exclude_unset=True))
+    return crud.update_order(db, order_id, **order.dict(exclude_unset=True, by_alias=True))
 
 
 @router.delete("/order/{order_id}")

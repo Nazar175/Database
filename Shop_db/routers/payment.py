@@ -13,7 +13,7 @@ class Payment(BaseModel):
     PaymentID: int | None = None
     OrderID: int | None = None
     Status: str | None = None
-    amount: condecimal(gt=0) | None = None
+    amount: float | None = Field(None, alias="Amount")
     PaymentDate: datetime | None = None
     PaymentMethod: str | None = None
 

@@ -24,7 +24,7 @@ class GiftType(str, enum.Enum):
 
 class GiftUnit(str, enum.Enum):
     USD = "USD"
-    Percent = "%"
+    Percent = "Percent"
 
 
 class Customer(Base):
@@ -94,7 +94,7 @@ class Courier(Base):
     __tablename__ = "Courier"
 
     CourierID = Column(Integer, primary_key=True, index=True)
-    CourierName = Column(String(100), nullable=False)
+    Name = Column(String(100), nullable=False)
     Country = Column(String(50))
     Price = Column(DECIMAL(10, 2))
     OrderID = Column(Integer, ForeignKey("Orders.OrderID"), unique=True)
@@ -108,7 +108,7 @@ class Payment(Base):
     PaymentID = Column(Integer, primary_key=True, index=True)
     OrderID = Column(Integer, ForeignKey("Orders.OrderID"), unique=True)
     Status = Column(Enum(PaymentStatus), default=PaymentStatus.Pending)
-    amount = Column(DECIMAL(10, 2), nullable=False)
+    Amount = Column(DECIMAL(10, 2), nullable=False)
     PaymentDate = Column(DateTime)
 
     order = relationship("Orders", back_populates="payment")
@@ -126,3 +126,11 @@ class Gifts(Base):
     PaymentID = Column(Integer, ForeignKey("Payment.PaymentID"))
 
     payment = relationship("Payment", back_populates="gifts")
+
+class User(Base):
+    __tablename__ = "User"
+
+    id = Column(Integer, primary_key=True, index=True)
+    username = Column(String(50), unique=True, nullable=False)
+    email = Column(String(100), unique=True, nullable=False)
+    password_hash = Column(String(128), nullable=False)
