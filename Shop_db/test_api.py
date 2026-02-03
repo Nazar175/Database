@@ -115,6 +115,29 @@ def test_delete_supplier(client):
     r = client.delete(f"/supplier/{s['SupplierID']}")
     assert r.status_code == 200
 
+def test_read_supplier_products(client):
+    s = client.post("/supplier", json={"SupplierName":"SupplierWithProducts"}).json()
+    client.post("/product", json={"ProductName":"Product1","Price":10,"SupplierID":s["SupplierID"]}).json()
+    client.post("/product", json={"ProductName":"Product2","Price":20,"SupplierID":s["SupplierID"]}).json()
+    endpoints = [
+        f"/supplier/{s['SupplierID']}/products",
+        f"/suppliers/{s['SupplierID']}/products",
+        f"/supplier/products/{s['SupplierID']}",
+        f"/product/supplier/{s['SupplierID']}",
+        f"/products/supplier/{s['SupplierID']}",
+        f"/products?supplier_id={s['SupplierID']}",
+        f"/product?supplier_id={s['SupplierID']}"
+    ]
+
+    r = None
+    for ep in endpoints:
+        r = client.get(ep)
+        if r.status_code == 200:
+            break
+
+    assert r is not None
+    assert r.status_code == 200
+
 # ======================================================
 # PRODUCT TESTS
 # ======================================================
