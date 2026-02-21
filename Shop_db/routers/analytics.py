@@ -9,7 +9,6 @@ from models import OrderDetail, Product, Orders, Customer
 router = APIRouter(prefix="/analytics", tags=["Analytics"])
 
 def create_random_order_for_customer(db: Session, customer_id: int):
-    """Твоя існуюча функція без змін"""
     order = Orders(
         CustomerID=customer_id,
         OrderDate=datetime.now(),
@@ -35,7 +34,6 @@ def create_random_order_for_customer(db: Session, customer_id: int):
 
 @router.post("/create-random-order/{customer_id}")
 def create_random_order_endpoint(customer_id: int, db: Session = Depends(get_db)):
-    """Endpoint для тесту, який викликає твою функцію"""
     customer = db.query(Customer).filter(Customer.CustomerID == customer_id).first()
     if not customer:
         raise HTTPException(status_code=404, detail="Customer not found")

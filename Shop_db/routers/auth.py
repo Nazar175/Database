@@ -1,34 +1,55 @@
-from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
-from passlib.context import CryptContext
+import hashlib
+import hmac
+import os
 from datetime import datetime, timedelta
+
 import jwt
-from database import get_db
+from fastapi import APIRouter, Depends, HTTPException
+from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
+from sqlalchemy.orm import Session
+
+from database import DATABASE_URL, get_db
 from models import User
 
-SECRET_KEY = "supersecretkey"
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+def _stable_default_signing_key() -> str:
+    seed = DATABASE_URL or "shop-db-default-seed"
+    return hashlib.sha256(seed.encode("utf-8")).hexdigest()
+
+
+JWT_SIGNING_KEY = os.getenv("JWT_SIGNING_KEY", _stable_default_signing_key())
+PASSWORD_SIGNING_KEY = os.getenv("PASSWORD_SIGNING_KEY", JWT_SIGNING_KEY)
+
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/login")
 router = APIRouter()
+
+
+def _hs256_sign(value: str, key: str) -> str:
+    return hmac.new(key.encode("utf-8"), value.encode("utf-8"), hashlib.sha256).hexdigest()
+
 
 def create_access_token(data: dict):
     to_encode = data.copy()
     expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     to_encode.update({"exp": expire})
-    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+    encoded_jwt = jwt.encode(to_encode, JWT_SIGNING_KEY, algorithm=ALGORITHM)
     return encoded_jwt
 
+
 def verify_password(plain_password, hashed_password):
-    return pwd_context.verify(plain_password, hashed_password)
+    expected_hash = _hs256_sign(plain_password, PASSWORD_SIGNING_KEY)
+    return hmac.compare_digest(expected_hash, hashed_password)
+
 
 def get_password_hash(password):
-    return pwd_context.hash(password)
+    return _hs256_sign(password, PASSWORD_SIGNING_KEY)
 
-def get_current_user(token: str = Depends(lambda token: token), db: Session = Depends(get_db)):
+
+def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
     try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        payload = jwt.decode(token, JWT_SIGNING_KEY, algorithms=[ALGORITHM])
         username = payload.get("sub")
         if username is None:
             raise HTTPException(status_code=401, detail="Invalid credentials")
@@ -57,9 +78,9 @@ def register(username: str, email: str, password: str, db: Session = Depends(get
     return {"message": "User created successfully"}
 
 @router.post("/login")
-def login(username: str, password: str, db: Session = Depends(get_db)):
-    user = db.query(User).filter(User.username == username).first()
-    if not user or not verify_password(password, user.password_hash):
+def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.username == form_data.username).first()
+    if not user or not verify_password(form_data.password, user.password_hash):
         raise HTTPException(status_code=401, detail="Invalid username or password")
     token = create_access_token({"sub": user.username})
     return {"access_token": token, "token_type": "bearer"}
