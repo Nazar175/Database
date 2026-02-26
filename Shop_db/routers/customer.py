@@ -1,11 +1,112 @@
-from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
-from database import get_db
-import crud, models
-from pydantic import BaseModel, EmailStr, constr
+import hashlib
+import hmac
+import os
+from datetime import datetime, timedelta
 from typing import List
 
+import jwt
+from fastapi import APIRouter, Depends, HTTPException
+from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
+from pydantic import BaseModel, EmailStr, constr
+from sqlalchemy.orm import Session
+
+import crud
+import models
+from database import DATABASE_URL, get_db
+
+ALGORITHM = "HS256"
+ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24
+
+
+def _stable_default_signing_key() -> str:
+    seed = DATABASE_URL or "shop-db-default-seed"
+    return hashlib.sha256(seed.encode("utf-8")).hexdigest()
+
+
+JWT_SIGNING_KEY = os.getenv("JWT_SIGNING_KEY", _stable_default_signing_key())
+PASSWORD_SIGNING_KEY = os.getenv("PASSWORD_SIGNING_KEY", JWT_SIGNING_KEY)
+
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/login")
+auth_router = APIRouter()
 router = APIRouter()
+
+
+def _hs256_sign(value: str, key: str) -> str:
+    return hmac.new(key.encode("utf-8"), value.encode("utf-8"), hashlib.sha256).hexdigest()
+
+
+def create_access_token(data: dict):
+    to_encode = data.copy()
+    expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    to_encode.update({"exp": expire})
+    encoded_jwt = jwt.encode(to_encode, JWT_SIGNING_KEY, algorithm=ALGORITHM)
+    return encoded_jwt
+
+
+def verify_password(plain_password, hashed_password):
+    expected_hash = _hs256_sign(plain_password, PASSWORD_SIGNING_KEY)
+    return hmac.compare_digest(expected_hash, hashed_password)
+
+
+def get_password_hash(password):
+    return _hs256_sign(password, PASSWORD_SIGNING_KEY)
+
+
+def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
+    try:
+        payload = jwt.decode(token, JWT_SIGNING_KEY, algorithms=[ALGORITHM])
+        username = payload.get("sub")
+        if username is None:
+            raise HTTPException(status_code=401, detail="Invalid credentials")
+        customer = db.query(models.Customer).filter(models.Customer.Name == username).first()
+        if customer is None:
+            raise HTTPException(status_code=401, detail="User not found")
+        return customer
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(status_code=401, detail="Token expired")
+    except jwt.PyJWTError:
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+
+@auth_router.post("/register")
+def register(
+    username: str,
+    email: str,
+    password: str,
+    phone: str | None = None,
+    country: str | None = None,
+    db: Session = Depends(get_db),
+):
+    customer = db.query(models.Customer).filter(
+        (models.Customer.Name == username) | (models.Customer.Email == email)
+    ).first()
+    if customer:
+        raise HTTPException(status_code=400, detail="User already exists")
+
+    new_customer = models.Customer(
+        Name=username,
+        Email=email,
+        Phone=phone,
+        Country=country,
+        password_hash=get_password_hash(password),
+    )
+    db.add(new_customer)
+    db.commit()
+    db.refresh(new_customer)
+    return {
+        "message": "User created successfully",
+        "customer_id": new_customer.CustomerID,
+    }
+
+
+@auth_router.post("/login")
+def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
+    customer = db.query(models.Customer).filter(models.Customer.Name == form_data.username).first()
+    if not customer or not customer.password_hash or not verify_password(form_data.password, customer.password_hash):
+        raise HTTPException(status_code=401, detail="Invalid username or password")
+
+    token = create_access_token({"sub": customer.Name})
+    return {"access_token": token, "token_type": "bearer"}
 
 # ---------- SCHEMAS ----------
 class Customer(BaseModel):
@@ -29,12 +130,6 @@ class CustomerRead(BaseModel):
 
     model_config = {"from_attributes": True}
 
-class CustomerCreate(BaseModel):
-    Name: constr(min_length=2, max_length=100)
-    Email: EmailStr
-    Phone: constr(min_length=6, max_length=20) | None = None
-    Country: constr(min_length=2, max_length=50) | None = None
-
 
 # ---------- ROUTES ----------
 @router.get("/customer", response_model=List[CustomerRead])
@@ -47,18 +142,6 @@ def read_customer(customer_id: int, db: Session = Depends(get_db)):
     if not customer:
         raise HTTPException(status_code=404, detail="Customer not found")
     return customer
-
-@router.post("/customer", response_model=CustomerRead)
-def create_customer(customer: CustomerCreate, db: Session = Depends(get_db)):
-    new_customer = crud.create_customer(
-        db,
-        Name=customer.Name,
-        Email=customer.Email,
-        Phone=customer.Phone,
-        Country=customer.Country
-    )
-    db.refresh(new_customer)
-    return CustomerRead.model_validate(new_customer)
 
 @router.put("/customer/{customer_id}", response_model=Customer)
 def update_customer(customer_id: int, customer: Customer, db: Session = Depends(get_db)):

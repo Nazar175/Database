@@ -9,8 +9,6 @@ from sqlalchemy.pool import StaticPool
 
 import database
 from database import Base, get_db
-from models import User
-from routers.auth import get_current_user
 
 SQLALCHEMY_DATABASE_URL = "sqlite:///:memory:"
 
@@ -43,6 +41,38 @@ def db_session():
         session.close()
 
 
+def _register_customer(client, username: str | None = None, password: str = "002233Tt"):
+    suffix = random.randint(1, 1_000_000)
+    username = username or f"user_{suffix}"
+    email = f"{username}@example.com"
+    response = client.post(
+        "/register",
+        params={
+            "username": username,
+            "email": email,
+            "password": password,
+            "phone": "1234567",
+            "country": "UA",
+        },
+    )
+    assert response.status_code == 200
+    return {
+        "CustomerID": response.json()["customer_id"],
+        "Name": username,
+        "Email": email,
+        "Password": password,
+    }
+
+
+def _login_customer(client, username: str, password: str) -> str:
+    response = client.post(
+        "/login",
+        data={"username": username, "password": password},
+    )
+    assert response.status_code == 200
+    return response.json()["access_token"]
+
+
 @pytest.fixture(scope="function")
 def client(db_session):
     def override_get_db():
@@ -51,13 +81,12 @@ def client(db_session):
         finally:
             db_session.close()
 
-    def override_get_current_user():
-        return User(id=1, username="testuser", email="test@example.com", password_hash="fakehash")
-
     app.dependency_overrides[get_db] = override_get_db
-    app.dependency_overrides[get_current_user] = override_get_current_user
 
     with TestClient(app) as c:
+        auth_customer = _register_customer(c, username=f"auth_{random.randint(1, 1_000_000)}")
+        access_token = _login_customer(c, auth_customer["Name"], auth_customer["Password"])
+        c.headers.update({"Authorization": f"Bearer {access_token}"})
         yield c
 
     app.dependency_overrides.clear()
@@ -123,18 +152,10 @@ def test_read_supplier_products(client):
     assert product_ids.issubset(found_ids)
 
 
-def test_create_customer(client):
-    email = f"user{random.randint(1, 10000)}@example.com"
-    customer = client.post(
-        "/customer",
-        json={
-            "Name": "Customer Flow",
-            "Email": email,
-            "Phone": "1234567",
-            "Country": "UA",
-        },
-    ).json()
-    assert customer["CustomerID"] > 0
+def test_register_and_login_customer(client):
+    customer = _register_customer(client, username=f"CustomerFlow_{random.randint(1, 1_000_000)}")
+    token = _login_customer(client, customer["Name"], customer["Password"])
+    assert token
     STATE["customer_id"] = customer["CustomerID"]
 
 

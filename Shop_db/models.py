@@ -35,6 +35,7 @@ class Customer(Base):
     Email = Column(String(100), unique=True, nullable=False)
     Phone = Column(String(20))
     Country = Column(String(50))
+    password_hash = Column(String(128), nullable=True)
 
     orders = relationship("Orders", back_populates="customer")
 
@@ -126,11 +127,3 @@ class Gifts(Base):
     PaymentID = Column(Integer, ForeignKey("Payment.PaymentID"))
 
     payment = relationship("Payment", back_populates="gifts")
-
-class User(Base):
-    __tablename__ = "User"
-
-    id = Column(Integer, primary_key=True, index=True)
-    username = Column(String(50), unique=True, nullable=False)
-    email = Column(String(100), unique=True, nullable=False)
-    password_hash = Column(String(128), nullable=False)
