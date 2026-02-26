@@ -22,7 +22,6 @@ class Courier(BaseModel):
         "from_attributes": True,
         "populate_by_name": True,
         "validate_by_name": True,
-        "alias_generator": lambda x: "CourierName" if x == "Name" else x
     }
 
 

@@ -9,3 +9,4 @@
 ### http://127.0.0.1:8000/docs#/
 ### Для запуску тестів: cd Shop_db
 ### py -m pytest -v test_api.py
+### py -m pytest -v test_integration_db.py

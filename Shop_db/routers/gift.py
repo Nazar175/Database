@@ -11,7 +11,7 @@ router = APIRouter()
 # ---------- SCHEMAS ----------
 class Gift(BaseModel):
     GiftID: int | None = None
-    amount: condecimal(gt=0) | None = Field(None, alias="Amount")
+    amount: float | None = Field(None, alias="Amount")
     exparesDate: datetime | None = Field(None, alias="ExparesDate")
     type: str | None = Field(None, alias="Type")
     unit: str | None = Field(None, alias="Unit")
@@ -56,7 +56,7 @@ def update_gift(gift_id: int, gift: Gift, db: Session = Depends(get_db)):
     db_gift = crud.get_gift(db, gift_id)
     if not db_gift:
         raise HTTPException(status_code=404, detail="Gift not found")
-    return crud.update_gift(db, gift_id, **gift.dict(exclude_unset=True))
+    return crud.update_gift(db, gift_id, **gift.dict(by_alias=True, exclude_unset=True))
 
 
 @router.delete("/gift/{gift_id}")

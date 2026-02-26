@@ -1,4 +1,5 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Depends
+from sqlalchemy import inspect, text
 from database import Base, engine
 from routers import (
     customer,
@@ -11,8 +12,25 @@ from routers import (
     supplier,
     analytics
 )
+from routers.customer import auth_router, get_current_user
 
 Base.metadata.create_all(bind=engine)
+
+
+def _ensure_customer_auth_column() -> None:
+    inspector = inspect(engine)
+    if not inspector.has_table("Customer"):
+        return
+
+    customer_columns = {column["name"] for column in inspector.get_columns("Customer")}
+    if "password_hash" in customer_columns:
+        return
+
+    with engine.begin() as connection:
+        connection.execute(text("ALTER TABLE Customer ADD COLUMN password_hash VARCHAR(128) NULL"))
+
+
+_ensure_customer_auth_column()
 
 app = FastAPI(
     title="Electron-Shop API",
@@ -20,16 +38,17 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# Підключення всіх роутерів
-app.include_router(customer.router, tags=["Customer"])
-app.include_router(order.router, tags=["Order"])
-app.include_router(orderdetail.router, tags=["Order Detail"])
-app.include_router(payment.router, tags=["Payment"])
-app.include_router(gift.router, tags=["Gift"])
-app.include_router(courier.router, tags=["Courier"])
-app.include_router(product.router, tags=["Product"])
-app.include_router(supplier.router, tags=["Supplier"])
-app.include_router(analytics.router, tags=["Analytics"])
+app.include_router(auth_router, tags=["Auth"])
+
+app.include_router(customer.router, tags=["Customer"], dependencies=[Depends(get_current_user)])
+app.include_router(order.router, tags=["Order"], dependencies=[Depends(get_current_user)])
+app.include_router(orderdetail.router, tags=["Order Detail"], dependencies=[Depends(get_current_user)])
+app.include_router(payment.router, tags=["Payment"], dependencies=[Depends(get_current_user)])
+app.include_router(gift.router, tags=["Gift"], dependencies=[Depends(get_current_user)])
+app.include_router(courier.router, tags=["Courier"], dependencies=[Depends(get_current_user)])
+app.include_router(product.router, tags=["Product"], dependencies=[Depends(get_current_user)])
+app.include_router(supplier.router, tags=["Supplier"], dependencies=[Depends(get_current_user)])
+app.include_router(analytics.router, tags=["Analytics"], dependencies=[Depends(get_current_user)])
 
 @app.get("/")
 def root():

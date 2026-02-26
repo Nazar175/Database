@@ -118,8 +118,22 @@ def update_order(db: Session, order_id: int, **kwargs):
     order = get_order(db, order_id)
     if not order:
         return None
+
+    field_map = {
+        "ShippingAddress": "ShippingAddress",
+        "shipping_address": "ShippingAddress",
+        "Status": "Status",
+        "status": "Status",
+        "OrderDate": "OrderDate",
+        "order_date": "OrderDate",
+        "CustomerID": "CustomerID",
+        "customer_id": "CustomerID"
+    }
+
     for key, value in kwargs.items():
-        setattr(order, key, value)
+        if key in field_map:
+            setattr(order, field_map[key], value)
+
     db.commit()
     db.refresh(order)
     return order
@@ -169,7 +183,7 @@ def delete_order_detail(db: Session, detail_id: int):
 # ---------- COURIER ----------
 def create_courier(db: Session, courier_name: str, country: str = None, price: float = None, order_id: int = None):
     db_courier = models.Courier(
-        CourierName=courier_name,
+        Name=courier_name,
         Country=country,
         Price=price,
         OrderID=order_id
@@ -207,7 +221,7 @@ def delete_courier(db: Session, courier_id: int):
 
 # ---------- PAYMENT ----------
 def create_payment(db: Session, order_id: int, Status: str, amount: float, payment_date):
-    payment = models.Payment(OrderID=order_id, Status=Status, amount=amount, PaymentDate=payment_date)
+    payment = models.Payment(OrderID=order_id, Status=Status, Amount=amount, PaymentDate=payment_date)
     db.add(payment)
     db.commit()
     db.refresh(payment)
@@ -224,6 +238,8 @@ def update_payment(db: Session, payment_id: int, **kwargs):
     if not payment:
         return None
     for key, value in kwargs.items():
+        if key == "amount":
+            key = "Amount"
         setattr(payment, key, value)
     db.commit()
     db.refresh(payment)
