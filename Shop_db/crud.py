@@ -1,6 +1,7 @@
 from sqlalchemy.orm import Session
 import models
 
+
 # ---------- CUSTOMER ----------
 def create_customer(db: Session, Name: str, Email: str, Phone: str = None, Country: str = None):
     customer = models.Customer(Name=Name, Email=Email, Phone=Phone, Country=Country)
@@ -9,11 +10,14 @@ def create_customer(db: Session, Name: str, Email: str, Phone: str = None, Count
     db.refresh(customer)
     return customer
 
+
 def get_customers(db: Session):
     return db.query(models.Customer).all()
 
+
 def get_customer(db: Session, customer_id: int):
     return db.query(models.Customer).filter(models.Customer.CustomerID == customer_id).first()
+
 
 def update_customer(db: Session, customer_id: int, **kwargs):
     customer = get_customer(db, customer_id)
@@ -25,6 +29,7 @@ def update_customer(db: Session, customer_id: int, **kwargs):
     db.refresh(customer)
     return customer
 
+
 def delete_customer(db: Session, customer_id: int):
     customer = get_customer(db, customer_id)
     if not customer:
@@ -35,21 +40,43 @@ def delete_customer(db: Session, customer_id: int):
 
 
 # ---------- SUPPLIER ----------
-def create_supplier(db: Session, supplier_name: str, address: str = None, phone: str = None, delivery_date=None):
-    supplier = models.Supplier(SupplierName=supplier_name, Address=address, Phone=phone, DeliveryDate=delivery_date)
+def create_supplier(
+    db: Session,
+    supplier_name: str,
+    address: str = None,
+    phone: str = None,
+    delivery_date=None,
+    owner_customer_id: int = None,
+):
+    supplier = models.Supplier(
+        SupplierName=supplier_name,
+        Address=address,
+        Phone=phone,
+        DeliveryDate=delivery_date,
+        OwnerCustomerID=owner_customer_id,
+    )
     db.add(supplier)
     db.commit()
     db.refresh(supplier)
     return supplier
 
-def get_suppliers(db: Session):
-    return db.query(models.Supplier).all()
 
-def get_supplier(db: Session, supplier_id: int):
-    return db.query(models.Supplier).filter(models.Supplier.SupplierID == supplier_id).first()
+def get_suppliers(db: Session, owner_customer_id: int = None):
+    query = db.query(models.Supplier)
+    if owner_customer_id is not None:
+        query = query.filter(models.Supplier.OwnerCustomerID == owner_customer_id)
+    return query.all()
 
-def update_supplier(db: Session, supplier_id: int, **kwargs):
-    supplier = get_supplier(db, supplier_id)
+
+def get_supplier(db: Session, supplier_id: int, owner_customer_id: int = None):
+    query = db.query(models.Supplier).filter(models.Supplier.SupplierID == supplier_id)
+    if owner_customer_id is not None:
+        query = query.filter(models.Supplier.OwnerCustomerID == owner_customer_id)
+    return query.first()
+
+
+def update_supplier(db: Session, supplier_id: int, owner_customer_id: int = None, **kwargs):
+    supplier = get_supplier(db, supplier_id, owner_customer_id=owner_customer_id)
     if not supplier:
         return None
     for key, value in kwargs.items():
@@ -58,8 +85,9 @@ def update_supplier(db: Session, supplier_id: int, **kwargs):
     db.refresh(supplier)
     return supplier
 
-def delete_supplier(db: Session, supplier_id: int):
-    supplier = get_supplier(db, supplier_id)
+
+def delete_supplier(db: Session, supplier_id: int, owner_customer_id: int = None):
+    supplier = get_supplier(db, supplier_id, owner_customer_id=owner_customer_id)
     if not supplier:
         return None
     db.delete(supplier)
@@ -68,21 +96,41 @@ def delete_supplier(db: Session, supplier_id: int):
 
 
 # ---------- PRODUCT ----------
-def create_product(db: Session, name: str, Price: float, supplier_id: int = None):
-    product = models.Product(ProductName=name, Price=Price, SupplierID=supplier_id)
+def create_product(
+    db: Session,
+    name: str,
+    Price: float,
+    supplier_id: int = None,
+    owner_customer_id: int = None,
+):
+    product = models.Product(
+        ProductName=name,
+        Price=Price,
+        SupplierID=supplier_id,
+        OwnerCustomerID=owner_customer_id,
+    )
     db.add(product)
     db.commit()
     db.refresh(product)
     return product
 
-def get_products(db: Session):
-    return db.query(models.Product).all()
 
-def get_product(db: Session, product_id: int):
-    return db.query(models.Product).filter(models.Product.ProductID == product_id).first()
+def get_products(db: Session, owner_customer_id: int = None):
+    query = db.query(models.Product)
+    if owner_customer_id is not None:
+        query = query.filter(models.Product.OwnerCustomerID == owner_customer_id)
+    return query.all()
 
-def update_product(db: Session, product_id: int, **kwargs):
-    product = get_product(db, product_id)
+
+def get_product(db: Session, product_id: int, owner_customer_id: int = None):
+    query = db.query(models.Product).filter(models.Product.ProductID == product_id)
+    if owner_customer_id is not None:
+        query = query.filter(models.Product.OwnerCustomerID == owner_customer_id)
+    return query.first()
+
+
+def update_product(db: Session, product_id: int, owner_customer_id: int = None, **kwargs):
+    product = get_product(db, product_id, owner_customer_id=owner_customer_id)
     if not product:
         return None
     for key, value in kwargs.items():
@@ -91,8 +139,9 @@ def update_product(db: Session, product_id: int, **kwargs):
     db.refresh(product)
     return product
 
-def delete_product(db: Session, product_id: int):
-    product = get_product(db, product_id)
+
+def delete_product(db: Session, product_id: int, owner_customer_id: int = None):
+    product = get_product(db, product_id, owner_customer_id=owner_customer_id)
     if not product:
         return None
     db.delete(product)
@@ -102,20 +151,34 @@ def delete_product(db: Session, product_id: int):
 
 # ---------- ORDERS ----------
 def create_order(db: Session, order_date, customer_id: int, shipping_address: str, Status: str = "Pending"):
-    order = models.Orders(OrderDate=order_date, CustomerID=customer_id, ShippingAddress=shipping_address, Status=Status)
+    order = models.Orders(
+        OrderDate=order_date,
+        CustomerID=customer_id,
+        ShippingAddress=shipping_address,
+        Status=Status,
+    )
     db.add(order)
     db.commit()
     db.refresh(order)
     return order
 
-def get_orders(db: Session):
-    return db.query(models.Orders).all()
 
-def get_order(db: Session, order_id: int):
-    return db.query(models.Orders).filter(models.Orders.OrderID == order_id).first()
+def get_orders(db: Session, customer_id: int = None):
+    query = db.query(models.Orders)
+    if customer_id is not None:
+        query = query.filter(models.Orders.CustomerID == customer_id)
+    return query.all()
 
-def update_order(db: Session, order_id: int, **kwargs):
-    order = get_order(db, order_id)
+
+def get_order(db: Session, order_id: int, customer_id: int = None):
+    query = db.query(models.Orders).filter(models.Orders.OrderID == order_id)
+    if customer_id is not None:
+        query = query.filter(models.Orders.CustomerID == customer_id)
+    return query.first()
+
+
+def update_order(db: Session, order_id: int, customer_id: int = None, **kwargs):
+    order = get_order(db, order_id, customer_id=customer_id)
     if not order:
         return None
 
@@ -127,7 +190,7 @@ def update_order(db: Session, order_id: int, **kwargs):
         "OrderDate": "OrderDate",
         "order_date": "OrderDate",
         "CustomerID": "CustomerID",
-        "customer_id": "CustomerID"
+        "customer_id": "CustomerID",
     }
 
     for key, value in kwargs.items():
@@ -138,8 +201,9 @@ def update_order(db: Session, order_id: int, **kwargs):
     db.refresh(order)
     return order
 
-def delete_order(db: Session, order_id: int):
-    order = get_order(db, order_id)
+
+def delete_order(db: Session, order_id: int, customer_id: int = None):
+    order = get_order(db, order_id, customer_id=customer_id)
     if not order:
         return None
     db.delete(order)
@@ -155,14 +219,27 @@ def create_order_detail(db: Session, order_id: int, product_id: int, quantity: i
     db.refresh(detail)
     return detail
 
-def get_order_details(db: Session):
-    return db.query(models.OrderDetail).all()
 
-def get_order_detail(db: Session, detail_id: int):
-    return db.query(models.OrderDetail).filter(models.OrderDetail.OrderDetailID == detail_id).first()
+def get_order_details(db: Session, customer_id: int = None):
+    query = db.query(models.OrderDetail)
+    if customer_id is not None:
+        query = query.join(models.Orders, models.OrderDetail.OrderID == models.Orders.OrderID).filter(
+            models.Orders.CustomerID == customer_id
+        )
+    return query.all()
 
-def update_order_detail(db: Session, detail_id: int, **kwargs):
-    detail = get_order_detail(db, detail_id)
+
+def get_order_detail(db: Session, detail_id: int, customer_id: int = None):
+    query = db.query(models.OrderDetail).filter(models.OrderDetail.OrderDetailID == detail_id)
+    if customer_id is not None:
+        query = query.join(models.Orders, models.OrderDetail.OrderID == models.Orders.OrderID).filter(
+            models.Orders.CustomerID == customer_id
+        )
+    return query.first()
+
+
+def update_order_detail(db: Session, detail_id: int, customer_id: int = None, **kwargs):
+    detail = get_order_detail(db, detail_id, customer_id=customer_id)
     if not detail:
         return None
     for key, value in kwargs.items():
@@ -171,8 +248,9 @@ def update_order_detail(db: Session, detail_id: int, **kwargs):
     db.refresh(detail)
     return detail
 
-def delete_order_detail(db: Session, detail_id: int):
-    detail = get_order_detail(db, detail_id)
+
+def delete_order_detail(db: Session, detail_id: int, customer_id: int = None):
+    detail = get_order_detail(db, detail_id, customer_id=customer_id)
     if not detail:
         return None
     db.delete(detail)
@@ -186,7 +264,7 @@ def create_courier(db: Session, courier_name: str, country: str = None, price: f
         Name=courier_name,
         Country=country,
         Price=price,
-        OrderID=order_id
+        OrderID=order_id,
     )
     db.add(db_courier)
     db.commit()
@@ -194,14 +272,26 @@ def create_courier(db: Session, courier_name: str, country: str = None, price: f
     return db_courier
 
 
-def get_couriers(db: Session):
-    return db.query(models.Courier).all()
+def get_couriers(db: Session, customer_id: int = None):
+    query = db.query(models.Courier)
+    if customer_id is not None:
+        query = query.join(models.Orders, models.Courier.OrderID == models.Orders.OrderID).filter(
+            models.Orders.CustomerID == customer_id
+        )
+    return query.all()
 
-def get_courier(db: Session, courier_id: int):
-    return db.query(models.Courier).filter(models.Courier.CourierID == courier_id).first()
 
-def update_courier(db: Session, courier_id: int, **kwargs):
-    courier = get_courier(db, courier_id)
+def get_courier(db: Session, courier_id: int, customer_id: int = None):
+    query = db.query(models.Courier).filter(models.Courier.CourierID == courier_id)
+    if customer_id is not None:
+        query = query.join(models.Orders, models.Courier.OrderID == models.Orders.OrderID).filter(
+            models.Orders.CustomerID == customer_id
+        )
+    return query.first()
+
+
+def update_courier(db: Session, courier_id: int, customer_id: int = None, **kwargs):
+    courier = get_courier(db, courier_id, customer_id=customer_id)
     if not courier:
         return None
     for key, value in kwargs.items():
@@ -210,8 +300,9 @@ def update_courier(db: Session, courier_id: int, **kwargs):
     db.refresh(courier)
     return courier
 
-def delete_courier(db: Session, courier_id: int):
-    courier = get_courier(db, courier_id)
+
+def delete_courier(db: Session, courier_id: int, customer_id: int = None):
+    courier = get_courier(db, courier_id, customer_id=customer_id)
     if not courier:
         return None
     db.delete(courier)
@@ -227,14 +318,27 @@ def create_payment(db: Session, order_id: int, Status: str, amount: float, payme
     db.refresh(payment)
     return payment
 
-def get_payments(db: Session):
-    return db.query(models.Payment).all()
 
-def get_payment(db: Session, payment_id: int):
-    return db.query(models.Payment).filter(models.Payment.PaymentID == payment_id).first()
+def get_payments(db: Session, customer_id: int = None):
+    query = db.query(models.Payment)
+    if customer_id is not None:
+        query = query.join(models.Orders, models.Payment.OrderID == models.Orders.OrderID).filter(
+            models.Orders.CustomerID == customer_id
+        )
+    return query.all()
 
-def update_payment(db: Session, payment_id: int, **kwargs):
-    payment = get_payment(db, payment_id)
+
+def get_payment(db: Session, payment_id: int, customer_id: int = None):
+    query = db.query(models.Payment).filter(models.Payment.PaymentID == payment_id)
+    if customer_id is not None:
+        query = query.join(models.Orders, models.Payment.OrderID == models.Orders.OrderID).filter(
+            models.Orders.CustomerID == customer_id
+        )
+    return query.first()
+
+
+def update_payment(db: Session, payment_id: int, customer_id: int = None, **kwargs):
+    payment = get_payment(db, payment_id, customer_id=customer_id)
     if not payment:
         return None
     for key, value in kwargs.items():
@@ -245,8 +349,9 @@ def update_payment(db: Session, payment_id: int, **kwargs):
     db.refresh(payment)
     return payment
 
-def delete_payment(db: Session, payment_id: int):
-    payment = get_payment(db, payment_id)
+
+def delete_payment(db: Session, payment_id: int, customer_id: int = None):
+    payment = get_payment(db, payment_id, customer_id=customer_id)
     if not payment:
         return None
     db.delete(payment)
@@ -262,14 +367,33 @@ def create_gift(db: Session, amount: float, exp_date, type_: str, unit: str, pay
     db.refresh(gift)
     return gift
 
-def get_gifts(db: Session):
-    return db.query(models.Gifts).all()
 
-def get_gift(db: Session, gift_id: int):
-    return db.query(models.Gifts).filter(models.Gifts.GiftID == gift_id).first()
+def get_gifts(db: Session, customer_id: int = None):
+    query = db.query(models.Gifts)
+    if customer_id is not None:
+        query = (
+            query
+            .join(models.Payment, models.Gifts.PaymentID == models.Payment.PaymentID)
+            .join(models.Orders, models.Payment.OrderID == models.Orders.OrderID)
+            .filter(models.Orders.CustomerID == customer_id)
+        )
+    return query.all()
 
-def update_gift(db: Session, gift_id: int, **kwargs):
-    gift = get_gift(db, gift_id)
+
+def get_gift(db: Session, gift_id: int, customer_id: int = None):
+    query = db.query(models.Gifts).filter(models.Gifts.GiftID == gift_id)
+    if customer_id is not None:
+        query = (
+            query
+            .join(models.Payment, models.Gifts.PaymentID == models.Payment.PaymentID)
+            .join(models.Orders, models.Payment.OrderID == models.Orders.OrderID)
+            .filter(models.Orders.CustomerID == customer_id)
+        )
+    return query.first()
+
+
+def update_gift(db: Session, gift_id: int, customer_id: int = None, **kwargs):
+    gift = get_gift(db, gift_id, customer_id=customer_id)
     if not gift:
         return None
     for key, value in kwargs.items():
@@ -278,8 +402,9 @@ def update_gift(db: Session, gift_id: int, **kwargs):
     db.refresh(gift)
     return gift
 
-def delete_gift(db: Session, gift_id: int):
-    gift = get_gift(db, gift_id)
+
+def delete_gift(db: Session, gift_id: int, customer_id: int = None):
+    gift = get_gift(db, gift_id, customer_id=customer_id)
     if not gift:
         return None
     db.delete(gift)

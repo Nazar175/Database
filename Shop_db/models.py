@@ -48,6 +48,7 @@ class Supplier(Base):
     Address = Column(String(200))
     Phone = Column(String(20))
     DeliveryDate = Column(DateTime)
+    OwnerCustomerID = Column(Integer, ForeignKey("Customer.CustomerID"), nullable=True)
 
     products = relationship("Product", back_populates="supplier")
 
@@ -59,6 +60,7 @@ class Product(Base):
     ProductName = Column(String(100), nullable=False)
     Price = Column(DECIMAL(10, 2), nullable=False)
     SupplierID = Column(Integer, ForeignKey("Supplier.SupplierID"))
+    OwnerCustomerID = Column(Integer, ForeignKey("Customer.CustomerID"), nullable=True)
 
     supplier = relationship("Supplier", back_populates="products")
     order_details = relationship("OrderDetail", back_populates="product")

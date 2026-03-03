@@ -17,20 +17,34 @@ from routers.customer import auth_router, get_current_user
 Base.metadata.create_all(bind=engine)
 
 
-def _ensure_customer_auth_column() -> None:
+def _ensure_column(table_name: str, column_name: str, ddl: str) -> None:
     inspector = inspect(engine)
-    if not inspector.has_table("Customer"):
+    if not inspector.has_table(table_name):
         return
 
-    customer_columns = {column["name"] for column in inspector.get_columns("Customer")}
-    if "password_hash" in customer_columns:
+    columns = {column["name"] for column in inspector.get_columns(table_name)}
+    if column_name in columns:
         return
 
     with engine.begin() as connection:
-        connection.execute(text("ALTER TABLE Customer ADD COLUMN password_hash VARCHAR(128) NULL"))
+        connection.execute(text(ddl))
 
 
-_ensure_customer_auth_column()
+_ensure_column(
+    table_name="Customer",
+    column_name="password_hash",
+    ddl="ALTER TABLE Customer ADD COLUMN password_hash VARCHAR(128) NULL",
+)
+_ensure_column(
+    table_name="Supplier",
+    column_name="OwnerCustomerID",
+    ddl="ALTER TABLE Supplier ADD COLUMN OwnerCustomerID INT NULL",
+)
+_ensure_column(
+    table_name="Product",
+    column_name="OwnerCustomerID",
+    ddl="ALTER TABLE Product ADD COLUMN OwnerCustomerID INT NULL",
+)
 
 app = FastAPI(
     title="Electron-Shop API",

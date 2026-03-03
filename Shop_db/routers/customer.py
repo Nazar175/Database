@@ -56,9 +56,18 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
     try:
         payload = jwt.decode(token, JWT_SIGNING_KEY, algorithms=[ALGORITHM])
         username = payload.get("sub")
+        customer_id = payload.get("customer_id")
         if username is None:
             raise HTTPException(status_code=401, detail="Invalid credentials")
-        customer = db.query(models.Customer).filter(models.Customer.Name == username).first()
+
+        customer = None
+        if customer_id is not None:
+            customer = db.query(models.Customer).filter(models.Customer.CustomerID == customer_id).first()
+
+        # Backward compatibility for tokens that do not have customer_id.
+        if customer is None:
+            customer = db.query(models.Customer).filter(models.Customer.Name == username).first()
+
         if customer is None:
             raise HTTPException(status_code=401, detail="User not found")
         return customer
@@ -105,7 +114,7 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
     if not customer or not customer.password_hash or not verify_password(form_data.password, customer.password_hash):
         raise HTTPException(status_code=401, detail="Invalid username or password")
 
-    token = create_access_token({"sub": customer.Name})
+    token = create_access_token({"sub": customer.Name, "customer_id": customer.CustomerID})
     return {"access_token": token, "token_type": "bearer"}
 
 # ---------- SCHEMAS ----------
@@ -131,28 +140,53 @@ class CustomerRead(BaseModel):
     model_config = {"from_attributes": True}
 
 
+def _ensure_self_access(customer_id: int, current_user: models.Customer) -> None:
+    if customer_id != current_user.CustomerID:
+        raise HTTPException(status_code=403, detail="Access denied")
+
+
 # ---------- ROUTES ----------
 @router.get("/customer", response_model=List[CustomerRead])
-def read_customers(db: Session = Depends(get_db)):
-    return crud.get_customers(db)
+def read_customers(
+    db: Session = Depends(get_db),
+    current_user: models.Customer = Depends(get_current_user),
+):
+    customer = crud.get_customer(db, current_user.CustomerID)
+    return [customer] if customer else []
 
 @router.get("/customer/{customer_id}", response_model=Customer)
-def read_customer(customer_id: int, db: Session = Depends(get_db)):
-    customer = crud.get_customer(db, customer_id)
+def read_customer(
+    customer_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.Customer = Depends(get_current_user),
+):
+    _ensure_self_access(customer_id, current_user)
+    customer = crud.get_customer(db, current_user.CustomerID)
     if not customer:
         raise HTTPException(status_code=404, detail="Customer not found")
     return customer
 
 @router.put("/customer/{customer_id}", response_model=Customer)
-def update_customer(customer_id: int, customer: Customer, db: Session = Depends(get_db)):
-    db_customer = crud.get_customer(db, customer_id)
+def update_customer(
+    customer_id: int,
+    customer: Customer,
+    db: Session = Depends(get_db),
+    current_user: models.Customer = Depends(get_current_user),
+):
+    _ensure_self_access(customer_id, current_user)
+    db_customer = crud.get_customer(db, current_user.CustomerID)
     if not db_customer:
         raise HTTPException(status_code=404, detail="Customer not found")
-    return crud.update_customer(db, customer_id, **customer.dict(exclude_unset=True))
+    return crud.update_customer(db, current_user.CustomerID, **customer.dict(exclude_unset=True))
 
 @router.delete("/customer/{customer_id}")
-def delete_customer(customer_id: int, db: Session = Depends(get_db)):
-    db_customer = crud.delete_customer(db, customer_id)
+def delete_customer(
+    customer_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.Customer = Depends(get_current_user),
+):
+    _ensure_self_access(customer_id, current_user)
+    db_customer = crud.delete_customer(db, current_user.CustomerID)
     if not db_customer:
         raise HTTPException(status_code=404, detail="Customer not found")
     return {"message": "Customer deleted successfully"}
