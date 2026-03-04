@@ -4,7 +4,7 @@
 
 ### Для запуску програми: cd Shop_db
 ### Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned
-### venv/Scripts/activate
+### venv/Scripts/activate і deactivate
 ### uvicorn main:app --reload
 ### http://127.0.0.1:8000/docs#/
 ### Для запуску тестів: cd Shop_db
