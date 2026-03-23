@@ -36,6 +36,11 @@ _ensure_column(
     ddl="ALTER TABLE Customer ADD COLUMN password_hash VARCHAR(128) NULL",
 )
 _ensure_column(
+    table_name="Customer",
+    column_name="Role",
+    ddl="ALTER TABLE Customer ADD COLUMN Role VARCHAR(20) NOT NULL DEFAULT 'user'",
+)
+_ensure_column(
     table_name="Supplier",
     column_name="OwnerCustomerID",
     ddl="ALTER TABLE Supplier ADD COLUMN OwnerCustomerID INT NULL",

@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 import crud
 import models
 from database import get_db
-from .customer import get_current_user
+from .customer import ensure_customer_scope, get_current_user
 
 router = APIRouter()
 
@@ -29,12 +29,6 @@ class ProductRead(ProductBase):
     model_config = {
         "from_attributes": True,
     }
-
-
-def _ensure_customer_scope(customer_id: int, current_user: models.Customer) -> None:
-    if customer_id != current_user.CustomerID:
-        raise HTTPException(status_code=403, detail="Access denied")
-
 
 # ---------- ROUTES ----------
 @router.get("/product", response_model=List[ProductRead])
@@ -127,10 +121,10 @@ def get_product_by_order_detail(
     db: Session = Depends(get_db),
     current_user: models.Customer = Depends(get_current_user),
 ):
-    _ensure_customer_scope(customer_id, current_user)
+    ensure_customer_scope(customer_id, current_user)
 
-    order = crud.get_order(db, order_id, customer_id=current_user.CustomerID)
-    detail = crud.get_order_detail(db, detail_id, customer_id=current_user.CustomerID)
+    order = crud.get_order(db, order_id, customer_id=customer_id)
+    detail = crud.get_order_detail(db, detail_id, customer_id=customer_id)
 
     if not order or not detail or detail.OrderID != order_id:
         raise HTTPException(status_code=404, detail="Customer, Order, or OrderDetail not found")
@@ -151,10 +145,10 @@ def create_product_for_order_detail(
     db: Session = Depends(get_db),
     current_user: models.Customer = Depends(get_current_user),
 ):
-    _ensure_customer_scope(customer_id, current_user)
+    ensure_customer_scope(customer_id, current_user)
 
-    order = crud.get_order(db, order_id, customer_id=current_user.CustomerID)
-    detail = crud.get_order_detail(db, detail_id, customer_id=current_user.CustomerID)
+    order = crud.get_order(db, order_id, customer_id=customer_id)
+    detail = crud.get_order_detail(db, detail_id, customer_id=customer_id)
 
     if not order or not detail or detail.OrderID != order_id:
         raise HTTPException(status_code=404, detail="Customer, Order, or OrderDetail not found")
@@ -172,7 +166,7 @@ def create_product_for_order_detail(
         owner_customer_id=current_user.CustomerID,
     )
 
-    crud.update_order_detail(db, detail_id, customer_id=current_user.CustomerID, ProductID=new_product.ProductID)
+    crud.update_order_detail(db, detail_id, customer_id=customer_id, ProductID=new_product.ProductID)
     return new_product
 
 
@@ -185,10 +179,10 @@ def update_product_for_order_detail(
     db: Session = Depends(get_db),
     current_user: models.Customer = Depends(get_current_user),
 ):
-    _ensure_customer_scope(customer_id, current_user)
+    ensure_customer_scope(customer_id, current_user)
 
-    order = crud.get_order(db, order_id, customer_id=current_user.CustomerID)
-    detail = crud.get_order_detail(db, detail_id, customer_id=current_user.CustomerID)
+    order = crud.get_order(db, order_id, customer_id=customer_id)
+    detail = crud.get_order_detail(db, detail_id, customer_id=customer_id)
 
     if not order or not detail or detail.OrderID != order_id:
         raise HTTPException(status_code=404, detail="Customer, Order, or OrderDetail not found")
@@ -221,10 +215,10 @@ def delete_product_for_order_detail(
     db: Session = Depends(get_db),
     current_user: models.Customer = Depends(get_current_user),
 ):
-    _ensure_customer_scope(customer_id, current_user)
+    ensure_customer_scope(customer_id, current_user)
 
-    order = crud.get_order(db, order_id, customer_id=current_user.CustomerID)
-    detail = crud.get_order_detail(db, detail_id, customer_id=current_user.CustomerID)
+    order = crud.get_order(db, order_id, customer_id=customer_id)
+    detail = crud.get_order_detail(db, detail_id, customer_id=customer_id)
 
     if not order or not detail or detail.OrderID != order_id:
         raise HTTPException(status_code=404, detail="Customer, Order, or OrderDetail not found")
@@ -233,7 +227,7 @@ def delete_product_for_order_detail(
     if not db_product:
         raise HTTPException(status_code=404, detail="Product not found")
 
-    crud.update_order_detail(db, detail_id, customer_id=current_user.CustomerID, ProductID=None)
+    crud.update_order_detail(db, detail_id, customer_id=customer_id, ProductID=None)
 
     if not crud.delete_product(db, db_product.ProductID, owner_customer_id=current_user.CustomerID):
         raise HTTPException(status_code=404, detail="Product not found")

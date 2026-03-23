@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 import crud
 import models
 from database import get_db
-from .customer import get_current_user
+from .customer import ensure_customer_scope, get_current_user, is_admin
 
 router = APIRouter()
 
@@ -25,11 +25,6 @@ class Order(BaseModel):
 class Config:
     orm_mode = True
     allow_population_by_field_name = True
-
-
-def _ensure_customer_scope(customer_id: int, current_user: models.Customer) -> None:
-    if customer_id != current_user.CustomerID:
-        raise HTTPException(status_code=403, detail="Access denied")
 
 
 # ---------- ROUTES ----------
@@ -59,13 +54,17 @@ def create_order(
     db: Session = Depends(get_db),
     current_user: models.Customer = Depends(get_current_user),
 ):
-    if order.CustomerID is not None and order.CustomerID != current_user.CustomerID:
-        raise HTTPException(status_code=403, detail="Access denied")
+    if not is_admin(current_user):
+        if order.CustomerID is not None and order.CustomerID != current_user.CustomerID:
+            raise HTTPException(status_code=403, detail="Access denied")
+        target_customer_id = current_user.CustomerID
+    else:
+        target_customer_id = order.CustomerID or current_user.CustomerID
 
     return crud.create_order(
         db,
         order_date=order.orderDate,
-        customer_id=current_user.CustomerID,
+        customer_id=target_customer_id,
         shipping_address=order.shippingAddress,
         Status=order.Status,
     )
@@ -83,10 +82,11 @@ def update_order(
         raise HTTPException(status_code=404, detail="Order not found")
 
     update_data = order.dict(exclude_unset=True, by_alias=True)
-    if "CustomerID" in update_data and update_data["CustomerID"] != current_user.CustomerID:
-        raise HTTPException(status_code=403, detail="Access denied")
+    if not is_admin(current_user):
+        if "CustomerID" in update_data and update_data["CustomerID"] != current_user.CustomerID:
+            raise HTTPException(status_code=403, detail="Access denied")
+        update_data["CustomerID"] = current_user.CustomerID
 
-    update_data["CustomerID"] = current_user.CustomerID
     return crud.update_order(db, order_id, customer_id=current_user.CustomerID, **update_data)
 
 
@@ -109,9 +109,8 @@ def get_orders_by_customer(
     db: Session = Depends(get_db),
     current_user: models.Customer = Depends(get_current_user),
 ):
-    _ensure_customer_scope(customer_id, current_user)
-
-    return crud.get_orders(db, customer_id=current_user.CustomerID)
+    ensure_customer_scope(customer_id, current_user)
+    return crud.get_orders(db, customer_id=customer_id)
 
 
 @router.post("/customer/{customer_id}/orders", response_model=Order)
@@ -121,12 +120,14 @@ def create_order_for_customer(
     db: Session = Depends(get_db),
     current_user: models.Customer = Depends(get_current_user),
 ):
-    _ensure_customer_scope(customer_id, current_user)
+    ensure_customer_scope(customer_id, current_user)
+
+    target_customer_id = customer_id if is_admin(current_user) else current_user.CustomerID
 
     return crud.create_order(
         db,
         order_date=order.orderDate,
-        customer_id=current_user.CustomerID,
+        customer_id=target_customer_id,
         shipping_address=order.shippingAddress,
         Status=order.Status,
     )
@@ -140,18 +141,21 @@ def update_order_for_customer(
     db: Session = Depends(get_db),
     current_user: models.Customer = Depends(get_current_user),
 ):
-    _ensure_customer_scope(customer_id, current_user)
+    ensure_customer_scope(customer_id, current_user)
 
-    db_order = crud.get_order(db, order_id, customer_id=current_user.CustomerID)
+    db_order = crud.get_order(db, order_id, customer_id=customer_id)
     if not db_order:
         raise HTTPException(status_code=404, detail="Order not found for this customer")
 
     update_data = order.dict(exclude_unset=True)
-    if "CustomerID" in update_data and update_data["CustomerID"] != current_user.CustomerID:
-        raise HTTPException(status_code=403, detail="Access denied")
+    if not is_admin(current_user):
+        if "CustomerID" in update_data and update_data["CustomerID"] != current_user.CustomerID:
+            raise HTTPException(status_code=403, detail="Access denied")
+        update_data["CustomerID"] = current_user.CustomerID
+    else:
+        update_data["CustomerID"] = customer_id
 
-    update_data["CustomerID"] = current_user.CustomerID
-    return crud.update_order(db, order_id, customer_id=current_user.CustomerID, **update_data)
+    return crud.update_order(db, order_id, customer_id=customer_id, **update_data)
 
 
 @router.delete("/customer/{customer_id}/orders/{order_id}")
@@ -161,11 +165,11 @@ def delete_order_for_customer(
     db: Session = Depends(get_db),
     current_user: models.Customer = Depends(get_current_user),
 ):
-    _ensure_customer_scope(customer_id, current_user)
+    ensure_customer_scope(customer_id, current_user)
 
-    db_order = crud.get_order(db, order_id, customer_id=current_user.CustomerID)
+    db_order = crud.get_order(db, order_id, customer_id=customer_id)
     if not db_order:
         raise HTTPException(status_code=404, detail="Order not found for this customer")
 
-    crud.delete_order(db, order_id, customer_id=current_user.CustomerID)
+    crud.delete_order(db, order_id, customer_id=customer_id)
     return {"message": "Order deleted successfully"}

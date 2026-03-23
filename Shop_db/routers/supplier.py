@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 import crud
 import models
 from database import get_db
-from .customer import get_current_user
+from .customer import ensure_customer_scope, get_current_user, is_admin
 from .product import ProductRead
 
 router = APIRouter()
@@ -29,12 +29,6 @@ class SupplierCreate(SupplierBase):
 class SupplierRead(SupplierBase):
     SupplierID: int
     model_config = {"from_attributes": True}
-
-
-def _ensure_customer_scope(customer_id: int, current_user: models.Customer) -> None:
-    if customer_id != current_user.CustomerID:
-        raise HTTPException(status_code=403, detail="Access denied")
-
 
 # ---------- ROUTES ----------
 @router.get("/supplier", response_model=List[SupplierRead])
@@ -121,10 +115,10 @@ def get_supplier_by_product(
     db: Session = Depends(get_db),
     current_user: models.Customer = Depends(get_current_user),
 ):
-    _ensure_customer_scope(customer_id, current_user)
+    ensure_customer_scope(customer_id, current_user)
 
-    order = crud.get_order(db, order_id, customer_id=current_user.CustomerID)
-    detail = crud.get_order_detail(db, detail_id, customer_id=current_user.CustomerID)
+    order = crud.get_order(db, order_id, customer_id=customer_id)
+    detail = crud.get_order_detail(db, detail_id, customer_id=customer_id)
     product = crud.get_product(db, product_id, owner_customer_id=current_user.CustomerID)
 
     if not order or not detail or not product:
@@ -153,10 +147,10 @@ def create_supplier_for_product(
     db: Session = Depends(get_db),
     current_user: models.Customer = Depends(get_current_user),
 ):
-    _ensure_customer_scope(customer_id, current_user)
+    ensure_customer_scope(customer_id, current_user)
 
-    order = crud.get_order(db, order_id, customer_id=current_user.CustomerID)
-    detail = crud.get_order_detail(db, detail_id, customer_id=current_user.CustomerID)
+    order = crud.get_order(db, order_id, customer_id=customer_id)
+    detail = crud.get_order_detail(db, detail_id, customer_id=customer_id)
     product = crud.get_product(db, product_id, owner_customer_id=current_user.CustomerID)
 
     if not order or not detail or not product:
@@ -194,10 +188,10 @@ def update_supplier_for_product(
     db: Session = Depends(get_db),
     current_user: models.Customer = Depends(get_current_user),
 ):
-    _ensure_customer_scope(customer_id, current_user)
+    ensure_customer_scope(customer_id, current_user)
 
-    order = crud.get_order(db, order_id, customer_id=current_user.CustomerID)
-    detail = crud.get_order_detail(db, detail_id, customer_id=current_user.CustomerID)
+    order = crud.get_order(db, order_id, customer_id=customer_id)
+    detail = crud.get_order_detail(db, detail_id, customer_id=customer_id)
     product = crud.get_product(db, product_id, owner_customer_id=current_user.CustomerID)
     db_supplier = crud.get_supplier(db, supplier_id, owner_customer_id=current_user.CustomerID)
 
@@ -229,10 +223,10 @@ def delete_supplier_for_product(
     db: Session = Depends(get_db),
     current_user: models.Customer = Depends(get_current_user),
 ):
-    _ensure_customer_scope(customer_id, current_user)
+    ensure_customer_scope(customer_id, current_user)
 
-    order = crud.get_order(db, order_id, customer_id=current_user.CustomerID)
-    detail = crud.get_order_detail(db, detail_id, customer_id=current_user.CustomerID)
+    order = crud.get_order(db, order_id, customer_id=customer_id)
+    detail = crud.get_order_detail(db, detail_id, customer_id=customer_id)
     product = crud.get_product(db, product_id, owner_customer_id=current_user.CustomerID)
     db_supplier = crud.get_supplier(db, supplier_id, owner_customer_id=current_user.CustomerID)
 
@@ -258,10 +252,8 @@ def get_products_by_supplier(
     if not supplier:
         raise HTTPException(status_code=404, detail="Supplier not found")
 
-    products = (
-        db.query(models.Product)
-        .filter(models.Product.SupplierID == supplier_id)
-        .filter(models.Product.OwnerCustomerID == current_user.CustomerID)
-        .all()
-    )
+    query = db.query(models.Product).filter(models.Product.SupplierID == supplier_id)
+    if not is_admin(current_user):
+        query = query.filter(models.Product.OwnerCustomerID == current_user.CustomerID)
+    products = query.all()
     return products

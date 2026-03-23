@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 import crud
 import models
 from database import get_db
-from .customer import get_current_user
+from .customer import ensure_customer_scope, get_current_user
 
 router = APIRouter()
 
@@ -27,12 +27,6 @@ class Payment(BaseModel):
         "populate_by_name": True,
         "validate_by_name": True,
     }
-
-
-def _ensure_customer_scope(customer_id: int, current_user: models.Customer) -> None:
-    if customer_id != current_user.CustomerID:
-        raise HTTPException(status_code=403, detail="Access denied")
-
 
 # ---------- ROUTES ----------
 @router.get("/payment", response_model=List[Payment])
@@ -114,9 +108,9 @@ def get_payment_by_order(
     db: Session = Depends(get_db),
     current_user: models.Customer = Depends(get_current_user),
 ):
-    _ensure_customer_scope(customer_id, current_user)
+    ensure_customer_scope(customer_id, current_user)
 
-    order = crud.get_order(db, order_id, customer_id=current_user.CustomerID)
+    order = crud.get_order(db, order_id, customer_id=customer_id)
     if not order:
         raise HTTPException(status_code=404, detail="Order not found for this customer")
 
@@ -135,9 +129,9 @@ def create_payment_for_order(
     db: Session = Depends(get_db),
     current_user: models.Customer = Depends(get_current_user),
 ):
-    _ensure_customer_scope(customer_id, current_user)
+    ensure_customer_scope(customer_id, current_user)
 
-    order = crud.get_order(db, order_id, customer_id=current_user.CustomerID)
+    order = crud.get_order(db, order_id, customer_id=customer_id)
     if not order:
         raise HTTPException(status_code=404, detail="Order not found for this customer")
 
@@ -158,9 +152,9 @@ def update_payment_for_order(
     db: Session = Depends(get_db),
     current_user: models.Customer = Depends(get_current_user),
 ):
-    _ensure_customer_scope(customer_id, current_user)
+    ensure_customer_scope(customer_id, current_user)
 
-    order = crud.get_order(db, order_id, customer_id=current_user.CustomerID)
+    order = crud.get_order(db, order_id, customer_id=customer_id)
     if not order:
         raise HTTPException(status_code=404, detail="Order not found for this customer")
 
@@ -171,7 +165,7 @@ def update_payment_for_order(
     return crud.update_payment(
         db,
         payment_record.PaymentID,
-        customer_id=current_user.CustomerID,
+        customer_id=customer_id,
         **payment.dict(exclude_unset=True),
     )
 
@@ -183,9 +177,9 @@ def delete_payment_for_order(
     db: Session = Depends(get_db),
     current_user: models.Customer = Depends(get_current_user),
 ):
-    _ensure_customer_scope(customer_id, current_user)
+    ensure_customer_scope(customer_id, current_user)
 
-    order = crud.get_order(db, order_id, customer_id=current_user.CustomerID)
+    order = crud.get_order(db, order_id, customer_id=customer_id)
     if not order:
         raise HTTPException(status_code=404, detail="Order not found for this customer")
 
@@ -193,7 +187,7 @@ def delete_payment_for_order(
     if not payment_record:
         raise HTTPException(status_code=404, detail="Payment not found for this order")
 
-    if not crud.delete_payment(db, payment_record.PaymentID, customer_id=current_user.CustomerID):
+    if not crud.delete_payment(db, payment_record.PaymentID, customer_id=customer_id):
         raise HTTPException(status_code=404, detail="Payment not found")
 
     return {"message": "Payment deleted successfully"}

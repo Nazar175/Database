@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 
 from database import get_db
 from models import Customer, OrderDetail, Orders, Product
-from .customer import get_current_user
+from .customer import ensure_customer_scope, get_current_user, is_admin
 
 router = APIRouter(prefix="/analytics", tags=["Analytics"])
 
@@ -49,10 +49,8 @@ def create_random_order_endpoint(
     db: Session = Depends(get_db),
     current_user: Customer = Depends(get_current_user),
 ):
-    if customer_id != current_user.CustomerID:
-        raise HTTPException(status_code=403, detail="Access denied")
-
-    customer = db.query(Customer).filter(Customer.CustomerID == current_user.CustomerID).first()
+    ensure_customer_scope(customer_id, current_user)
+    customer = db.query(Customer).filter(Customer.CustomerID == customer_id).first()
     if not customer:
         raise HTTPException(status_code=404, detail="Customer not found")
 
@@ -77,7 +75,7 @@ def get_order_summary(
     current_user: Customer = Depends(get_current_user),
 ):
     try:
-        results = (
+        query = (
             db.query(
                 Orders.OrderID,
                 Orders.OrderDate,
@@ -88,10 +86,11 @@ def get_order_summary(
             .join(OrderDetail, OrderDetail.OrderID == Orders.OrderID)
             .join(Product, Product.ProductID == OrderDetail.ProductID)
             .join(Customer, Customer.CustomerID == Orders.CustomerID)
-            .filter(Orders.CustomerID == current_user.CustomerID)
             .group_by(Orders.OrderID, Orders.OrderDate, Customer.Name, Orders.Status)
-            .all()
         )
+        if not is_admin(current_user):
+            query = query.filter(Orders.CustomerID == current_user.CustomerID)
+        results = query.all()
 
         summary = [
             {

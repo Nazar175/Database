@@ -1,5 +1,24 @@
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 import models
+
+ROLE_ADMIN = "admin"
+
+
+def _is_admin_customer_scope(db: Session, customer_id: int | None) -> bool:
+    if customer_id is None:
+        return False
+    try:
+        customer = db.query(models.Customer).filter(models.Customer.CustomerID == customer_id).first()
+    except SQLAlchemyError:
+        return False
+    if not customer:
+        return False
+    return (getattr(customer, "Role", "") or "").lower() == ROLE_ADMIN
+
+
+def _should_apply_customer_filter(db: Session, customer_id: int | None) -> bool:
+    return customer_id is not None and not _is_admin_customer_scope(db, customer_id)
 
 
 # ---------- CUSTOMER ----------
@@ -63,14 +82,14 @@ def create_supplier(
 
 def get_suppliers(db: Session, owner_customer_id: int = None):
     query = db.query(models.Supplier)
-    if owner_customer_id is not None:
+    if _should_apply_customer_filter(db, owner_customer_id):
         query = query.filter(models.Supplier.OwnerCustomerID == owner_customer_id)
     return query.all()
 
 
 def get_supplier(db: Session, supplier_id: int, owner_customer_id: int = None):
     query = db.query(models.Supplier).filter(models.Supplier.SupplierID == supplier_id)
-    if owner_customer_id is not None:
+    if _should_apply_customer_filter(db, owner_customer_id):
         query = query.filter(models.Supplier.OwnerCustomerID == owner_customer_id)
     return query.first()
 
@@ -117,14 +136,14 @@ def create_product(
 
 def get_products(db: Session, owner_customer_id: int = None):
     query = db.query(models.Product)
-    if owner_customer_id is not None:
+    if _should_apply_customer_filter(db, owner_customer_id):
         query = query.filter(models.Product.OwnerCustomerID == owner_customer_id)
     return query.all()
 
 
 def get_product(db: Session, product_id: int, owner_customer_id: int = None):
     query = db.query(models.Product).filter(models.Product.ProductID == product_id)
-    if owner_customer_id is not None:
+    if _should_apply_customer_filter(db, owner_customer_id):
         query = query.filter(models.Product.OwnerCustomerID == owner_customer_id)
     return query.first()
 
@@ -165,14 +184,14 @@ def create_order(db: Session, order_date, customer_id: int, shipping_address: st
 
 def get_orders(db: Session, customer_id: int = None):
     query = db.query(models.Orders)
-    if customer_id is not None:
+    if _should_apply_customer_filter(db, customer_id):
         query = query.filter(models.Orders.CustomerID == customer_id)
     return query.all()
 
 
 def get_order(db: Session, order_id: int, customer_id: int = None):
     query = db.query(models.Orders).filter(models.Orders.OrderID == order_id)
-    if customer_id is not None:
+    if _should_apply_customer_filter(db, customer_id):
         query = query.filter(models.Orders.CustomerID == customer_id)
     return query.first()
 
@@ -222,7 +241,7 @@ def create_order_detail(db: Session, order_id: int, product_id: int, quantity: i
 
 def get_order_details(db: Session, customer_id: int = None):
     query = db.query(models.OrderDetail)
-    if customer_id is not None:
+    if _should_apply_customer_filter(db, customer_id):
         query = query.join(models.Orders, models.OrderDetail.OrderID == models.Orders.OrderID).filter(
             models.Orders.CustomerID == customer_id
         )
@@ -231,7 +250,7 @@ def get_order_details(db: Session, customer_id: int = None):
 
 def get_order_detail(db: Session, detail_id: int, customer_id: int = None):
     query = db.query(models.OrderDetail).filter(models.OrderDetail.OrderDetailID == detail_id)
-    if customer_id is not None:
+    if _should_apply_customer_filter(db, customer_id):
         query = query.join(models.Orders, models.OrderDetail.OrderID == models.Orders.OrderID).filter(
             models.Orders.CustomerID == customer_id
         )
@@ -274,7 +293,7 @@ def create_courier(db: Session, courier_name: str, country: str = None, price: f
 
 def get_couriers(db: Session, customer_id: int = None):
     query = db.query(models.Courier)
-    if customer_id is not None:
+    if _should_apply_customer_filter(db, customer_id):
         query = query.join(models.Orders, models.Courier.OrderID == models.Orders.OrderID).filter(
             models.Orders.CustomerID == customer_id
         )
@@ -283,7 +302,7 @@ def get_couriers(db: Session, customer_id: int = None):
 
 def get_courier(db: Session, courier_id: int, customer_id: int = None):
     query = db.query(models.Courier).filter(models.Courier.CourierID == courier_id)
-    if customer_id is not None:
+    if _should_apply_customer_filter(db, customer_id):
         query = query.join(models.Orders, models.Courier.OrderID == models.Orders.OrderID).filter(
             models.Orders.CustomerID == customer_id
         )
@@ -321,7 +340,7 @@ def create_payment(db: Session, order_id: int, Status: str, amount: float, payme
 
 def get_payments(db: Session, customer_id: int = None):
     query = db.query(models.Payment)
-    if customer_id is not None:
+    if _should_apply_customer_filter(db, customer_id):
         query = query.join(models.Orders, models.Payment.OrderID == models.Orders.OrderID).filter(
             models.Orders.CustomerID == customer_id
         )
@@ -330,7 +349,7 @@ def get_payments(db: Session, customer_id: int = None):
 
 def get_payment(db: Session, payment_id: int, customer_id: int = None):
     query = db.query(models.Payment).filter(models.Payment.PaymentID == payment_id)
-    if customer_id is not None:
+    if _should_apply_customer_filter(db, customer_id):
         query = query.join(models.Orders, models.Payment.OrderID == models.Orders.OrderID).filter(
             models.Orders.CustomerID == customer_id
         )
@@ -370,7 +389,7 @@ def create_gift(db: Session, amount: float, exp_date, type_: str, unit: str, pay
 
 def get_gifts(db: Session, customer_id: int = None):
     query = db.query(models.Gifts)
-    if customer_id is not None:
+    if _should_apply_customer_filter(db, customer_id):
         query = (
             query
             .join(models.Payment, models.Gifts.PaymentID == models.Payment.PaymentID)
@@ -382,7 +401,7 @@ def get_gifts(db: Session, customer_id: int = None):
 
 def get_gift(db: Session, gift_id: int, customer_id: int = None):
     query = db.query(models.Gifts).filter(models.Gifts.GiftID == gift_id)
-    if customer_id is not None:
+    if _should_apply_customer_filter(db, customer_id):
         query = (
             query
             .join(models.Payment, models.Gifts.PaymentID == models.Payment.PaymentID)

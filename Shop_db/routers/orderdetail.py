@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 import crud
 import models
 from database import get_db
-from .customer import get_current_user
+from .customer import ensure_customer_scope, get_current_user
 
 router = APIRouter()
 
@@ -24,12 +24,6 @@ class OrderDetail(BaseModel):
         "populate_by_name": True,
         "validate_by_name": True,
     }
-
-
-def _ensure_customer_scope(customer_id: int, current_user: models.Customer) -> None:
-    if customer_id != current_user.CustomerID:
-        raise HTTPException(status_code=403, detail="Access denied")
-
 
 # ---------- ROUTES ----------
 @router.get("/orderdetail", response_model=List[OrderDetail])
@@ -116,13 +110,13 @@ def get_details_by_order(
     db: Session = Depends(get_db),
     current_user: models.Customer = Depends(get_current_user),
 ):
-    _ensure_customer_scope(customer_id, current_user)
+    ensure_customer_scope(customer_id, current_user)
 
-    order = crud.get_order(db, order_id, customer_id=current_user.CustomerID)
+    order = crud.get_order(db, order_id, customer_id=customer_id)
     if not order:
         raise HTTPException(status_code=404, detail="Order not found for this customer")
 
-    return [d for d in crud.get_order_details(db, customer_id=current_user.CustomerID) if d.OrderID == order_id]
+    return [d for d in crud.get_order_details(db, customer_id=customer_id) if d.OrderID == order_id]
 
 
 @router.post("/customer/{customer_id}/orders/{order_id}/orderdetail", response_model=OrderDetail)
@@ -133,9 +127,9 @@ def create_detail_for_order(
     db: Session = Depends(get_db),
     current_user: models.Customer = Depends(get_current_user),
 ):
-    _ensure_customer_scope(customer_id, current_user)
+    ensure_customer_scope(customer_id, current_user)
 
-    order = crud.get_order(db, order_id, customer_id=current_user.CustomerID)
+    order = crud.get_order(db, order_id, customer_id=customer_id)
     product = crud.get_product(db, detail.ProductID, owner_customer_id=current_user.CustomerID)
     if not order or not product:
         raise HTTPException(status_code=404, detail="Order or Product not found for this customer")
@@ -152,10 +146,10 @@ def update_detail_for_order(
     db: Session = Depends(get_db),
     current_user: models.Customer = Depends(get_current_user),
 ):
-    _ensure_customer_scope(customer_id, current_user)
+    ensure_customer_scope(customer_id, current_user)
 
-    order = crud.get_order(db, order_id, customer_id=current_user.CustomerID)
-    db_detail = crud.get_order_detail(db, detail_id, customer_id=current_user.CustomerID)
+    order = crud.get_order(db, order_id, customer_id=customer_id)
+    db_detail = crud.get_order_detail(db, detail_id, customer_id=customer_id)
     if not order or not db_detail or db_detail.OrderID != order.OrderID:
         raise HTTPException(status_code=404, detail="OrderDetail not found for this customer and order")
 
@@ -166,7 +160,7 @@ def update_detail_for_order(
         if not product:
             raise HTTPException(status_code=404, detail="Product not found")
 
-    return crud.update_order_detail(db, detail_id, customer_id=current_user.CustomerID, **update_data)
+    return crud.update_order_detail(db, detail_id, customer_id=customer_id, **update_data)
 
 
 @router.delete("/customer/{customer_id}/orders/{order_id}/orderdetail/{detail_id}")
@@ -177,14 +171,14 @@ def delete_detail_for_order(
     db: Session = Depends(get_db),
     current_user: models.Customer = Depends(get_current_user),
 ):
-    _ensure_customer_scope(customer_id, current_user)
+    ensure_customer_scope(customer_id, current_user)
 
-    order = crud.get_order(db, order_id, customer_id=current_user.CustomerID)
-    db_detail = crud.get_order_detail(db, detail_id, customer_id=current_user.CustomerID)
+    order = crud.get_order(db, order_id, customer_id=customer_id)
+    db_detail = crud.get_order_detail(db, detail_id, customer_id=customer_id)
     if not order or not db_detail or db_detail.OrderID != order.OrderID:
         raise HTTPException(status_code=404, detail="OrderDetail not found for this customer and order")
 
-    if not crud.delete_order_detail(db, detail_id, customer_id=current_user.CustomerID):
+    if not crud.delete_order_detail(db, detail_id, customer_id=customer_id):
         raise HTTPException(status_code=404, detail="OrderDetail not found")
 
     return {"message": "OrderDetail deleted successfully"}

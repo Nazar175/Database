@@ -16,6 +16,8 @@ from database import DATABASE_URL, get_db
 
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24
+ROLE_ADMIN = "admin"
+ROLE_USER = "user"
 
 
 def _stable_default_signing_key() -> str:
@@ -25,6 +27,7 @@ def _stable_default_signing_key() -> str:
 
 JWT_SIGNING_KEY = os.getenv("JWT_SIGNING_KEY", _stable_default_signing_key())
 PASSWORD_SIGNING_KEY = os.getenv("PASSWORD_SIGNING_KEY", JWT_SIGNING_KEY)
+ADMIN_REGISTRATION_KEY = os.getenv("ADMIN_REGISTRATION_KEY", "1461")
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/login")
 auth_router = APIRouter()
@@ -52,6 +55,24 @@ def get_password_hash(password):
     return _hs256_sign(password, PASSWORD_SIGNING_KEY)
 
 
+def _normalize_role(role: str | None) -> str:
+    normalized = (role or ROLE_USER).strip().lower()
+    if normalized not in {ROLE_ADMIN, ROLE_USER}:
+        raise HTTPException(status_code=400, detail="Invalid role. Allowed values: admin, user")
+    return normalized
+
+
+def is_admin(current_user: models.Customer) -> bool:
+    return (getattr(current_user, "Role", ROLE_USER) or ROLE_USER).lower() == ROLE_ADMIN
+
+
+def ensure_customer_scope(customer_id: int, current_user: models.Customer) -> None:
+    if is_admin(current_user):
+        return
+    if customer_id != current_user.CustomerID:
+        raise HTTPException(status_code=403, detail="Access denied")
+
+
 def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
     try:
         payload = jwt.decode(token, JWT_SIGNING_KEY, algorithms=[ALGORITHM])
@@ -64,7 +85,6 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
         if customer_id is not None:
             customer = db.query(models.Customer).filter(models.Customer.CustomerID == customer_id).first()
 
-        # Backward compatibility for tokens that do not have customer_id.
         if customer is None:
             customer = db.query(models.Customer).filter(models.Customer.Name == username).first()
 
@@ -82,10 +102,16 @@ def register(
     username: str,
     email: str,
     password: str,
+    role: str = ROLE_USER,
+    admin_key: str | None = None,
     phone: str | None = None,
     country: str | None = None,
     db: Session = Depends(get_db),
 ):
+    normalized_role = _normalize_role(role)
+    if normalized_role == ROLE_ADMIN and admin_key != ADMIN_REGISTRATION_KEY:
+        raise HTTPException(status_code=403, detail="Invalid admin key")
+
     customer = db.query(models.Customer).filter(
         (models.Customer.Name == username) | (models.Customer.Email == email)
     ).first()
@@ -97,6 +123,7 @@ def register(
         Email=email,
         Phone=phone,
         Country=country,
+        Role=normalized_role,
         password_hash=get_password_hash(password),
     )
     db.add(new_customer)
@@ -114,7 +141,13 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
     if not customer or not customer.password_hash or not verify_password(form_data.password, customer.password_hash):
         raise HTTPException(status_code=401, detail="Invalid username or password")
 
-    token = create_access_token({"sub": customer.Name, "customer_id": customer.CustomerID})
+    token = create_access_token(
+        {
+            "sub": customer.Name,
+            "customer_id": customer.CustomerID,
+            "role": (customer.Role or ROLE_USER).lower(),
+        }
+    )
     return {"access_token": token, "token_type": "bearer"}
 
 # ---------- SCHEMAS ----------
@@ -124,6 +157,7 @@ class Customer(BaseModel):
     Email: EmailStr | None = None
     Phone: constr(min_length=6, max_length=20) | None = None
     Country: constr(min_length=2, max_length=50) | None = None
+    Role: str | None = None
 
     model_config = {
         "from_attributes": True,
@@ -136,13 +170,9 @@ class CustomerRead(BaseModel):
     Email: EmailStr
     Phone: str | None
     Country: str | None
+    Role: str | None
 
     model_config = {"from_attributes": True}
-
-
-def _ensure_self_access(customer_id: int, current_user: models.Customer) -> None:
-    if customer_id != current_user.CustomerID:
-        raise HTTPException(status_code=403, detail="Access denied")
 
 
 # ---------- ROUTES ----------
@@ -151,6 +181,9 @@ def read_customers(
     db: Session = Depends(get_db),
     current_user: models.Customer = Depends(get_current_user),
 ):
+    if is_admin(current_user):
+        return crud.get_customers(db)
+
     customer = crud.get_customer(db, current_user.CustomerID)
     return [customer] if customer else []
 
@@ -160,8 +193,9 @@ def read_customer(
     db: Session = Depends(get_db),
     current_user: models.Customer = Depends(get_current_user),
 ):
-    _ensure_self_access(customer_id, current_user)
-    customer = crud.get_customer(db, current_user.CustomerID)
+    ensure_customer_scope(customer_id, current_user)
+    target_customer_id = customer_id if is_admin(current_user) else current_user.CustomerID
+    customer = crud.get_customer(db, target_customer_id)
     if not customer:
         raise HTTPException(status_code=404, detail="Customer not found")
     return customer
@@ -173,11 +207,16 @@ def update_customer(
     db: Session = Depends(get_db),
     current_user: models.Customer = Depends(get_current_user),
 ):
-    _ensure_self_access(customer_id, current_user)
-    db_customer = crud.get_customer(db, current_user.CustomerID)
+    ensure_customer_scope(customer_id, current_user)
+    target_customer_id = customer_id if is_admin(current_user) else current_user.CustomerID
+    db_customer = crud.get_customer(db, target_customer_id)
     if not db_customer:
         raise HTTPException(status_code=404, detail="Customer not found")
-    return crud.update_customer(db, current_user.CustomerID, **customer.dict(exclude_unset=True))
+
+    update_data = customer.dict(exclude_unset=True)
+    if not is_admin(current_user):
+        update_data.pop("Role", None)
+    return crud.update_customer(db, target_customer_id, **update_data)
 
 @router.delete("/customer/{customer_id}")
 def delete_customer(
@@ -185,8 +224,9 @@ def delete_customer(
     db: Session = Depends(get_db),
     current_user: models.Customer = Depends(get_current_user),
 ):
-    _ensure_self_access(customer_id, current_user)
-    db_customer = crud.delete_customer(db, current_user.CustomerID)
+    ensure_customer_scope(customer_id, current_user)
+    target_customer_id = customer_id if is_admin(current_user) else current_user.CustomerID
+    db_customer = crud.delete_customer(db, target_customer_id)
     if not db_customer:
         raise HTTPException(status_code=404, detail="Customer not found")
     return {"message": "Customer deleted successfully"}

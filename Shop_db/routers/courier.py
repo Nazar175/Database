@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 import crud
 import models
 from database import get_db
-from .customer import get_current_user
+from .customer import ensure_customer_scope, get_current_user
 
 router = APIRouter()
 
@@ -25,12 +25,6 @@ class Courier(BaseModel):
         "populate_by_name": True,
         "validate_by_name": True,
     }
-
-
-def _ensure_customer_scope(customer_id: int, current_user: models.Customer) -> None:
-    if customer_id != current_user.CustomerID:
-        raise HTTPException(status_code=403, detail="Access denied")
-
 
 # ---------- ROUTES ----------
 @router.get("/courier", response_model=List[Courier])
@@ -115,9 +109,9 @@ def get_courier_by_order(
     db: Session = Depends(get_db),
     current_user: models.Customer = Depends(get_current_user),
 ):
-    _ensure_customer_scope(customer_id, current_user)
+    ensure_customer_scope(customer_id, current_user)
 
-    order = crud.get_order(db, order_id, customer_id=current_user.CustomerID)
+    order = crud.get_order(db, order_id, customer_id=customer_id)
     if not order:
         raise HTTPException(status_code=404, detail="Order not found for this customer")
 
@@ -136,9 +130,9 @@ def create_courier_for_order(
     db: Session = Depends(get_db),
     current_user: models.Customer = Depends(get_current_user),
 ):
-    _ensure_customer_scope(customer_id, current_user)
+    ensure_customer_scope(customer_id, current_user)
 
-    order = crud.get_order(db, order_id, customer_id=current_user.CustomerID)
+    order = crud.get_order(db, order_id, customer_id=customer_id)
     if not order:
         raise HTTPException(status_code=404, detail="Order not found for this customer")
 
@@ -153,9 +147,9 @@ def update_courier_for_order(
     db: Session = Depends(get_db),
     current_user: models.Customer = Depends(get_current_user),
 ):
-    _ensure_customer_scope(customer_id, current_user)
+    ensure_customer_scope(customer_id, current_user)
 
-    order = crud.get_order(db, order_id, customer_id=current_user.CustomerID)
+    order = crud.get_order(db, order_id, customer_id=customer_id)
     if not order:
         raise HTTPException(status_code=404, detail="Order not found for this customer")
 
@@ -165,14 +159,14 @@ def update_courier_for_order(
 
     update_data = courier.dict(exclude_unset=True)
     if "OrderID" in update_data and update_data["OrderID"] != order_id:
-        target_order = crud.get_order(db, update_data["OrderID"], customer_id=current_user.CustomerID)
+        target_order = crud.get_order(db, update_data["OrderID"], customer_id=customer_id)
         if not target_order:
             raise HTTPException(status_code=404, detail="Order not found")
 
     return crud.update_courier(
         db,
         courier_record.CourierID,
-        customer_id=current_user.CustomerID,
+        customer_id=customer_id,
         **update_data,
     )
 
@@ -184,9 +178,9 @@ def delete_courier_for_order(
     db: Session = Depends(get_db),
     current_user: models.Customer = Depends(get_current_user),
 ):
-    _ensure_customer_scope(customer_id, current_user)
+    ensure_customer_scope(customer_id, current_user)
 
-    order = crud.get_order(db, order_id, customer_id=current_user.CustomerID)
+    order = crud.get_order(db, order_id, customer_id=customer_id)
     if not order:
         raise HTTPException(status_code=404, detail="Order not found for this customer")
 
@@ -194,7 +188,7 @@ def delete_courier_for_order(
     if not courier_record:
         raise HTTPException(status_code=404, detail="Courier not found for this order")
 
-    if not crud.delete_courier(db, courier_record.CourierID, customer_id=current_user.CustomerID):
+    if not crud.delete_courier(db, courier_record.CourierID, customer_id=customer_id):
         raise HTTPException(status_code=404, detail="Courier not found")
 
     return {"message": "Courier deleted successfully"}

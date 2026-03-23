@@ -35,6 +35,7 @@ class Customer(Base):
     Email = Column(String(100), unique=True, nullable=False)
     Phone = Column(String(20))
     Country = Column(String(50))
+    Role = Column(String(20), nullable=False, default="user")
     password_hash = Column(String(128), nullable=True)
 
     orders = relationship("Orders", back_populates="customer")
