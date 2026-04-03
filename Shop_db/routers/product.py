@@ -1,4 +1,9 @@
+import json
+import time
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from typing import List
+from urllib.error import HTTPError, URLError
+from urllib.request import urlopen
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, condecimal, constr
@@ -10,6 +15,85 @@ from database import get_db
 from .customer import ensure_customer_scope, ensure_seller_or_admin, get_current_user, is_admin, is_seller
 
 router = APIRouter()
+
+PRIVAT24_EXCHANGE_URL = "https://api.privatbank.ua/p24api/pubinfo?json&exchange&coursid=5"
+_RATES_CACHE_TTL_SECONDS = 300
+_rates_cache: dict[str, float | dict[str, Decimal] | None] = {
+    "timestamp": 0.0,
+    "rates": None,
+}
+
+
+def _fetch_privat24_rates() -> dict[str, Decimal] | None:
+    try:
+        with urlopen(PRIVAT24_EXCHANGE_URL, timeout=2) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+    except (HTTPError, URLError, TimeoutError, OSError, ValueError, UnicodeDecodeError):
+        return None
+
+    if not isinstance(payload, list):
+        return None
+
+    rates: dict[str, Decimal] = {}
+    for item in payload:
+        if not isinstance(item, dict):
+            continue
+
+        currency = (item.get("ccy") or "").upper()
+        if currency not in {"USD", "EUR"}:
+            continue
+
+        try:
+            sale_rate = Decimal(str(item.get("sale")))
+        except (InvalidOperation, TypeError, ValueError):
+            continue
+
+        if sale_rate > 0:
+            rates[currency] = sale_rate
+
+    return rates or None
+
+
+def _get_privat24_rates() -> dict[str, Decimal] | None:
+    now = time.monotonic()
+    cached_timestamp = _rates_cache["timestamp"]
+    if isinstance(cached_timestamp, float) and (now - cached_timestamp) < _RATES_CACHE_TTL_SECONDS:
+        cached_rates = _rates_cache["rates"]
+        if isinstance(cached_rates, dict):
+            return cached_rates
+        return None
+
+    rates = _fetch_privat24_rates()
+    _rates_cache["timestamp"] = now
+    _rates_cache["rates"] = rates
+    return rates
+
+
+def _as_decimal(value: Decimal | float | int | str) -> Decimal | None:
+    try:
+        return Decimal(str(value))
+    except (InvalidOperation, TypeError, ValueError):
+        return None
+
+
+def _convert_from_uah(price_uah: Decimal, rate: Decimal | None) -> Decimal | None:
+    if rate is None or rate <= 0:
+        return None
+    return (price_uah / rate).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
+
+def _calculate_approx_prices(price_uah: Decimal | float | int | str) -> tuple[Decimal | None, Decimal | None]:
+    normalized_price = _as_decimal(price_uah)
+    if normalized_price is None or normalized_price <= 0:
+        return None, None
+
+    rates = _get_privat24_rates()
+    if not rates:
+        return None, None
+
+    approx_usd = _convert_from_uah(normalized_price, rates.get("USD"))
+    approx_eur = _convert_from_uah(normalized_price, rates.get("EUR"))
+    return approx_usd, approx_eur
 
 
 # ---------- SCHEMAS ----------
@@ -30,6 +114,12 @@ class ProductRead(ProductBase):
         "from_attributes": True,
     }
 
+
+class ProductReadWithApprox(ProductRead):
+    ApproxPriceUSD: Decimal | None = None
+    ApproxPriceEUR: Decimal | None = None
+
+
 # ---------- ROUTES ----------
 @router.get("/product", response_model=List[ProductRead])
 def read_products(
@@ -43,7 +133,7 @@ def read_products(
     return crud.get_products(db)
 
 
-@router.get("/product/{product_id}", response_model=ProductRead)
+@router.get("/product/{product_id}", response_model=ProductReadWithApprox)
 def read_product(
     product_id: int,
     db: Session = Depends(get_db),
@@ -53,7 +143,15 @@ def read_product(
     product = crud.get_product(db, product_id, owner_customer_id=owner_scope)
     if not product:
         raise HTTPException(status_code=404, detail="Product not found")
-    return product
+
+    approx_usd, approx_eur = _calculate_approx_prices(product.Price)
+    product_payload = ProductReadWithApprox.model_validate(product)
+    return product_payload.model_copy(
+        update={
+            "ApproxPriceUSD": approx_usd,
+            "ApproxPriceEUR": approx_eur,
+        }
+    )
 
 
 @router.post("/product", response_model=ProductRead)

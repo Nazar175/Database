@@ -175,6 +175,9 @@ def test_read_product(client):
     p = client.post("/product", json={"ProductName":"ProductRead","Price":20,"SupplierID":s["SupplierID"]}).json()
     r = client.get(f"/product/{p['ProductID']}")
     assert r.status_code == 200
+    payload = r.json()
+    assert "ApproxPriceUSD" in payload
+    assert "ApproxPriceEUR" in payload
 
 def test_update_product(client):
     s = client.post("/supplier", json={"SupplierName":"SupplierUpdateProd"}).json()
