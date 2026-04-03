@@ -8,6 +8,7 @@ import jwt
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from pydantic import BaseModel, EmailStr, constr
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 import crud
@@ -18,6 +19,7 @@ ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24
 ROLE_ADMIN = "admin"
 ROLE_USER = "user"
+ROLE_SELLER = "seller"
 
 
 def _stable_default_signing_key() -> str:
@@ -57,13 +59,34 @@ def get_password_hash(password):
 
 def _normalize_role(role: str | None) -> str:
     normalized = (role or ROLE_USER).strip().lower()
-    if normalized not in {ROLE_ADMIN, ROLE_USER}:
-        raise HTTPException(status_code=400, detail="Invalid role. Allowed values: admin, user")
+    if normalized not in {ROLE_ADMIN, ROLE_USER, ROLE_SELLER}:
+        raise HTTPException(status_code=400, detail="Invalid role. Allowed values: admin, user, seller")
     return normalized
 
 
 def is_admin(current_user: models.Customer) -> bool:
     return (getattr(current_user, "Role", ROLE_USER) or ROLE_USER).lower() == ROLE_ADMIN
+
+
+def is_seller(db: Session, current_user: models.Customer) -> bool:
+    if is_admin(current_user):
+        return False
+    seller_profile = (
+        db.query(models.Supplier)
+        .filter(
+            models.Supplier.OwnerCustomerID == current_user.CustomerID,
+            func.lower(models.Supplier.Role) == ROLE_SELLER,
+        )
+        .first()
+    )
+    return seller_profile is not None
+
+
+def ensure_seller_or_admin(db: Session, current_user: models.Customer) -> None:
+    if is_admin(current_user):
+        return
+    if not is_seller(db, current_user):
+        raise HTTPException(status_code=403, detail="Only seller or admin can modify supplier/product data")
 
 
 def ensure_customer_scope(customer_id: int, current_user: models.Customer) -> None:
@@ -118,20 +141,37 @@ def register(
     if customer:
         raise HTTPException(status_code=400, detail="User already exists")
 
+    persisted_customer_role = ROLE_USER if normalized_role == ROLE_SELLER else normalized_role
+
     new_customer = models.Customer(
         Name=username,
         Email=email,
         Phone=phone,
         Country=country,
-        Role=normalized_role,
+        Role=persisted_customer_role,
         password_hash=get_password_hash(password),
     )
     db.add(new_customer)
     db.commit()
     db.refresh(new_customer)
+
+    supplier_id = None
+    if normalized_role == ROLE_SELLER:
+        seller_profile = models.Supplier(
+            SupplierName=username,
+            Phone=phone,
+            Role=ROLE_SELLER,
+            OwnerCustomerID=new_customer.CustomerID,
+        )
+        db.add(seller_profile)
+        db.commit()
+        db.refresh(seller_profile)
+        supplier_id = seller_profile.SupplierID
+
     return {
         "message": "User created successfully",
         "customer_id": new_customer.CustomerID,
+        "supplier_id": supplier_id,
     }
 
 

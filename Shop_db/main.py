@@ -30,6 +30,52 @@ def _ensure_column(table_name: str, column_name: str, ddl: str) -> None:
         connection.execute(text(ddl))
 
 
+def _migrate_shipping_address_to_order_detail() -> None:
+    inspector = inspect(engine)
+    if not inspector.has_table("Orders") or not inspector.has_table("OrderDetail"):
+        return
+
+    orders_columns = {column["name"] for column in inspector.get_columns("Orders")}
+    details_columns = {column["name"] for column in inspector.get_columns("OrderDetail")}
+
+    if "ShippingAddress" in orders_columns and "ShippingAddress" in details_columns:
+        dialect = engine.dialect.name
+        with engine.begin() as connection:
+            if dialect == "mysql":
+                connection.execute(
+                    text(
+                        """
+                        UPDATE OrderDetail od
+                        JOIN Orders o ON o.OrderID = od.OrderID
+                        SET od.ShippingAddress = o.ShippingAddress
+                        WHERE od.ShippingAddress IS NULL
+                        """
+                    )
+                )
+            else:
+                connection.execute(
+                    text(
+                        """
+                        UPDATE OrderDetail
+                        SET ShippingAddress = (
+                            SELECT Orders.ShippingAddress
+                            FROM Orders
+                            WHERE Orders.OrderID = OrderDetail.OrderID
+                        )
+                        WHERE ShippingAddress IS NULL
+                        """
+                    )
+                )
+
+    if "ShippingAddress" in orders_columns:
+        try:
+            with engine.begin() as connection:
+                connection.execute(text("ALTER TABLE Orders DROP COLUMN ShippingAddress"))
+        except Exception:
+            # Some engines or versions may not support DROP COLUMN directly.
+            pass
+
+
 _ensure_column(
     table_name="Customer",
     column_name="password_hash",
@@ -46,10 +92,22 @@ _ensure_column(
     ddl="ALTER TABLE Supplier ADD COLUMN OwnerCustomerID INT NULL",
 )
 _ensure_column(
+    table_name="Supplier",
+    column_name="Role",
+    ddl="ALTER TABLE Supplier ADD COLUMN Role VARCHAR(20) NOT NULL DEFAULT 'seller'",
+)
+_ensure_column(
     table_name="Product",
     column_name="OwnerCustomerID",
     ddl="ALTER TABLE Product ADD COLUMN OwnerCustomerID INT NULL",
 )
+_ensure_column(
+    table_name="OrderDetail",
+    column_name="ShippingAddress",
+    ddl="ALTER TABLE OrderDetail ADD COLUMN ShippingAddress VARCHAR(200) NULL",
+)
+
+_migrate_shipping_address_to_order_detail()
 
 app = FastAPI(
     title="Electron-Shop API",

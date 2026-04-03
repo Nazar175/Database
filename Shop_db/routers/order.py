@@ -2,7 +2,7 @@ from datetime import datetime
 from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, Field, constr
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 import crud
@@ -17,7 +17,6 @@ router = APIRouter()
 class Order(BaseModel):
     OrderID: int | None = None
     orderDate: datetime | None = Field(None, alias="OrderDate")
-    shippingAddress: constr(min_length=5, max_length=200) | None = Field(None, alias="ShippingAddress")
     Status: str | None = Field("Pending", alias="Status")
     CustomerID: int | None = Field(None, alias="CustomerID")
 
@@ -65,7 +64,6 @@ def create_order(
         db,
         order_date=order.orderDate,
         customer_id=target_customer_id,
-        shipping_address=order.shippingAddress,
         Status=order.Status,
     )
 
@@ -128,7 +126,6 @@ def create_order_for_customer(
         db,
         order_date=order.orderDate,
         customer_id=target_customer_id,
-        shipping_address=order.shippingAddress,
         Status=order.Status,
     )
 

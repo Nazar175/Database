@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 import crud
 import models
 from database import get_db
-from .customer import ensure_customer_scope, get_current_user, is_admin
+from .customer import ensure_customer_scope, ensure_seller_or_admin, get_current_user, is_admin
 from .product import ProductRead
 
 router = APIRouter()
@@ -28,6 +28,7 @@ class SupplierCreate(SupplierBase):
 
 class SupplierRead(SupplierBase):
     SupplierID: int
+    Role: str
     model_config = {"from_attributes": True}
 
 # ---------- ROUTES ----------
@@ -36,7 +37,8 @@ def read_suppliers(
     db: Session = Depends(get_db),
     current_user: models.Customer = Depends(get_current_user),
 ):
-    return crud.get_suppliers(db, owner_customer_id=current_user.CustomerID)
+    owner_scope = None if is_admin(current_user) else current_user.CustomerID
+    return crud.get_suppliers(db, owner_customer_id=owner_scope)
 
 
 @router.get("/supplier/{supplier_id}", response_model=SupplierRead)
@@ -45,7 +47,8 @@ def read_supplier(
     db: Session = Depends(get_db),
     current_user: models.Customer = Depends(get_current_user),
 ):
-    supplier = crud.get_supplier(db, supplier_id, owner_customer_id=current_user.CustomerID)
+    owner_scope = None if is_admin(current_user) else current_user.CustomerID
+    supplier = crud.get_supplier(db, supplier_id, owner_customer_id=owner_scope)
     if not supplier:
         raise HTTPException(status_code=404, detail="Supplier not found")
     return supplier
@@ -57,12 +60,19 @@ def create_supplier(
     db: Session = Depends(get_db),
     current_user: models.Customer = Depends(get_current_user),
 ):
+    if not is_admin(current_user):
+        raise HTTPException(
+            status_code=403,
+            detail="Supplier profile is created automatically during seller registration",
+        )
+
     new_supplier = crud.create_supplier(
         db,
         supplier_name=supplier.SupplierName,
         address=supplier.Address,
         phone=supplier.Phone,
         delivery_date=supplier.DeliveryDate,
+        role="seller",
         owner_customer_id=current_user.CustomerID,
     )
     db.refresh(new_supplier)
@@ -76,7 +86,9 @@ def update_supplier(
     db: Session = Depends(get_db),
     current_user: models.Customer = Depends(get_current_user),
 ):
-    db_supplier = crud.get_supplier(db, supplier_id, owner_customer_id=current_user.CustomerID)
+    ensure_seller_or_admin(db, current_user)
+    owner_scope = None if is_admin(current_user) else current_user.CustomerID
+    db_supplier = crud.get_supplier(db, supplier_id, owner_customer_id=owner_scope)
     if not db_supplier:
         raise HTTPException(status_code=404, detail="Supplier not found")
 
@@ -84,7 +96,7 @@ def update_supplier(
     updated = crud.update_supplier(
         db,
         supplier_id,
-        owner_customer_id=current_user.CustomerID,
+        owner_customer_id=owner_scope,
         **update_data,
     )
 
@@ -97,7 +109,9 @@ def delete_supplier(
     db: Session = Depends(get_db),
     current_user: models.Customer = Depends(get_current_user),
 ):
-    if not crud.delete_supplier(db, supplier_id, owner_customer_id=current_user.CustomerID):
+    ensure_seller_or_admin(db, current_user)
+    owner_scope = None if is_admin(current_user) else current_user.CustomerID
+    if not crud.delete_supplier(db, supplier_id, owner_customer_id=owner_scope):
         raise HTTPException(status_code=404, detail="Supplier not found")
     return {"message": "Supplier deleted successfully"}
 
@@ -119,7 +133,7 @@ def get_supplier_by_product(
 
     order = crud.get_order(db, order_id, customer_id=customer_id)
     detail = crud.get_order_detail(db, detail_id, customer_id=customer_id)
-    product = crud.get_product(db, product_id, owner_customer_id=current_user.CustomerID)
+    product = crud.get_product(db, product_id)
 
     if not order or not detail or not product:
         raise HTTPException(status_code=404, detail="Resource not found")
@@ -127,7 +141,7 @@ def get_supplier_by_product(
     if detail.OrderID != order.OrderID or detail.ProductID != product.ProductID:
         raise HTTPException(status_code=400, detail="Mismatched Customer, Order, OrderDetail, or Product")
 
-    supplier = crud.get_supplier(db, product.SupplierID, owner_customer_id=current_user.CustomerID)
+    supplier = crud.get_supplier(db, product.SupplierID)
     if not supplier:
         raise HTTPException(status_code=404, detail="Supplier not found")
 
@@ -148,10 +162,16 @@ def create_supplier_for_product(
     current_user: models.Customer = Depends(get_current_user),
 ):
     ensure_customer_scope(customer_id, current_user)
+    if not is_admin(current_user):
+        raise HTTPException(
+            status_code=403,
+            detail="Creating a supplier is allowed only during seller registration",
+        )
+    owner_scope = None
 
     order = crud.get_order(db, order_id, customer_id=customer_id)
     detail = crud.get_order_detail(db, detail_id, customer_id=customer_id)
-    product = crud.get_product(db, product_id, owner_customer_id=current_user.CustomerID)
+    product = crud.get_product(db, product_id, owner_customer_id=owner_scope)
 
     if not order or not detail or not product:
         raise HTTPException(status_code=404, detail="Resource not found")
@@ -165,6 +185,7 @@ def create_supplier_for_product(
         address=supplier.Address,
         phone=supplier.Phone,
         delivery_date=supplier.DeliveryDate,
+        role="seller",
         owner_customer_id=current_user.CustomerID,
     )
 
@@ -189,11 +210,13 @@ def update_supplier_for_product(
     current_user: models.Customer = Depends(get_current_user),
 ):
     ensure_customer_scope(customer_id, current_user)
+    ensure_seller_or_admin(db, current_user)
+    owner_scope = None if is_admin(current_user) else current_user.CustomerID
 
     order = crud.get_order(db, order_id, customer_id=customer_id)
     detail = crud.get_order_detail(db, detail_id, customer_id=customer_id)
-    product = crud.get_product(db, product_id, owner_customer_id=current_user.CustomerID)
-    db_supplier = crud.get_supplier(db, supplier_id, owner_customer_id=current_user.CustomerID)
+    product = crud.get_product(db, product_id, owner_customer_id=owner_scope)
+    db_supplier = crud.get_supplier(db, supplier_id, owner_customer_id=owner_scope)
 
     if not order or not detail or not product or not db_supplier:
         raise HTTPException(status_code=404, detail="Resource not found")
@@ -205,7 +228,7 @@ def update_supplier_for_product(
     updated = crud.update_supplier(
         db,
         supplier_id,
-        owner_customer_id=current_user.CustomerID,
+        owner_customer_id=owner_scope,
         **update_data,
     )
     return updated
@@ -224,11 +247,13 @@ def delete_supplier_for_product(
     current_user: models.Customer = Depends(get_current_user),
 ):
     ensure_customer_scope(customer_id, current_user)
+    ensure_seller_or_admin(db, current_user)
+    owner_scope = None if is_admin(current_user) else current_user.CustomerID
 
     order = crud.get_order(db, order_id, customer_id=customer_id)
     detail = crud.get_order_detail(db, detail_id, customer_id=customer_id)
-    product = crud.get_product(db, product_id, owner_customer_id=current_user.CustomerID)
-    db_supplier = crud.get_supplier(db, supplier_id, owner_customer_id=current_user.CustomerID)
+    product = crud.get_product(db, product_id, owner_customer_id=owner_scope)
+    db_supplier = crud.get_supplier(db, supplier_id, owner_customer_id=owner_scope)
 
     if not order or not detail or not product or not db_supplier:
         raise HTTPException(status_code=404, detail="Resource not found")
@@ -236,7 +261,7 @@ def delete_supplier_for_product(
     if detail.OrderID != order.OrderID or detail.ProductID != product.ProductID or product.SupplierID != db_supplier.SupplierID:
         raise HTTPException(status_code=400, detail="Mismatched Customer, Order, OrderDetail, Product, or Supplier")
 
-    if not crud.delete_supplier(db, supplier_id, owner_customer_id=current_user.CustomerID):
+    if not crud.delete_supplier(db, supplier_id, owner_customer_id=owner_scope):
         raise HTTPException(status_code=404, detail="Supplier not found")
 
     return {"message": "Supplier deleted successfully"}
@@ -248,12 +273,10 @@ def get_products_by_supplier(
     db: Session = Depends(get_db),
     current_user: models.Customer = Depends(get_current_user),
 ):
-    supplier = crud.get_supplier(db, supplier_id, owner_customer_id=current_user.CustomerID)
+    supplier = crud.get_supplier(db, supplier_id)
     if not supplier:
         raise HTTPException(status_code=404, detail="Supplier not found")
 
     query = db.query(models.Product).filter(models.Product.SupplierID == supplier_id)
-    if not is_admin(current_user):
-        query = query.filter(models.Product.OwnerCustomerID == current_user.CustomerID)
     products = query.all()
     return products

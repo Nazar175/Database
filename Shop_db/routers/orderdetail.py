@@ -18,6 +18,7 @@ class OrderDetail(BaseModel):
     OrderID: int | None = None
     ProductID: int | None = None
     quantity: int | None = Field(None, alias="Quantity")
+    shippingAddress: str | None = Field(None, alias="ShippingAddress")
 
     model_config = {
         "from_attributes": True,
@@ -53,11 +54,17 @@ def create_detail(
     current_user: models.Customer = Depends(get_current_user),
 ):
     order = crud.get_order(db, detail.OrderID, customer_id=current_user.CustomerID)
-    product = crud.get_product(db, detail.ProductID, owner_customer_id=current_user.CustomerID)
+    product = crud.get_product(db, detail.ProductID)
     if not order or not product:
         raise HTTPException(status_code=404, detail="Order or Product not found")
 
-    return crud.create_order_detail(db, detail.OrderID, detail.ProductID, detail.quantity)
+    return crud.create_order_detail(
+        db,
+        detail.OrderID,
+        detail.ProductID,
+        detail.quantity,
+        detail.shippingAddress,
+    )
 
 
 @router.put("/orderdetail/{orderdetail_id}", response_model=OrderDetail)
@@ -79,7 +86,7 @@ def update_detail(
             raise HTTPException(status_code=404, detail="Order not found")
 
     if "ProductID" in update_data:
-        product = crud.get_product(db, update_data["ProductID"], owner_customer_id=current_user.CustomerID)
+        product = crud.get_product(db, update_data["ProductID"])
         if not product:
             raise HTTPException(status_code=404, detail="Product not found")
 
@@ -130,11 +137,17 @@ def create_detail_for_order(
     ensure_customer_scope(customer_id, current_user)
 
     order = crud.get_order(db, order_id, customer_id=customer_id)
-    product = crud.get_product(db, detail.ProductID, owner_customer_id=current_user.CustomerID)
+    product = crud.get_product(db, detail.ProductID)
     if not order or not product:
         raise HTTPException(status_code=404, detail="Order or Product not found for this customer")
 
-    return crud.create_order_detail(db, order_id, detail.ProductID, detail.quantity)
+    return crud.create_order_detail(
+        db,
+        order_id,
+        detail.ProductID,
+        detail.quantity,
+        detail.shippingAddress,
+    )
 
 
 @router.put("/customer/{customer_id}/orders/{order_id}/orderdetail/{detail_id}", response_model=OrderDetail)
@@ -153,10 +166,10 @@ def update_detail_for_order(
     if not order or not db_detail or db_detail.OrderID != order.OrderID:
         raise HTTPException(status_code=404, detail="OrderDetail not found for this customer and order")
 
-    update_data = detail.dict(exclude_unset=True)
+    update_data = detail.dict(by_alias=True, exclude_unset=True)
 
     if "ProductID" in update_data:
-        product = crud.get_product(db, update_data["ProductID"], owner_customer_id=current_user.CustomerID)
+        product = crud.get_product(db, update_data["ProductID"])
         if not product:
             raise HTTPException(status_code=404, detail="Product not found")
 

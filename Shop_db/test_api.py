@@ -45,7 +45,13 @@ def client(db_session):
 
     from models import Customer
     def override_get_current_user():
-        return Customer(CustomerID=1, Name="testuser", Email="test@example.com", password_hash="fakehash")
+        return Customer(
+            CustomerID=1,
+            Name="testuser",
+            Email="test@example.com",
+            Role="admin",
+            password_hash="fakehash",
+        )
 
     app.dependency_overrides[get_db] = override_get_db
     app.dependency_overrides[get_current_user] = override_get_current_user
@@ -190,7 +196,6 @@ def test_create_order(client):
     cust = _register_customer(client, name="CustomerOrder", email=f"{random.randint(1,1000)}@example.com")
     r = client.post("/order", json={
         "OrderDate": datetime.now().isoformat(),
-        "ShippingAddress":"AddressOrder",
         "Status":"Pending",
         "CustomerID":cust["CustomerID"]
     }).json()
@@ -198,19 +203,19 @@ def test_create_order(client):
 
 def test_read_order(client):
     cust = _register_customer(client, name="CustomerRead", email=f"{random.randint(1,1000)}@example.com")
-    o = client.post("/order", json={"OrderDate": datetime.now().isoformat(),"ShippingAddress":"AddressRead","Status":"Pending","CustomerID":cust["CustomerID"]}).json()
+    o = client.post("/order", json={"OrderDate": datetime.now().isoformat(),"Status":"Pending","CustomerID":cust["CustomerID"]}).json()
     r = client.get(f"/order/{o['OrderID']}")
     assert r.status_code == 200
 
 def test_update_order(client):
     cust = _register_customer(client, name="CustomerUpdate", email=f"{random.randint(1,1000)}@example.com")
-    o = client.post("/order", json={"OrderDate": datetime.now().isoformat(),"ShippingAddress":"AddressUpdate","Status":"Pending","CustomerID":cust["CustomerID"]}).json()
-    r = client.put(f"/order/{o['OrderID']}", json={"ShippingAddress":"UpdatedAddress"}).json()
-    assert r["ShippingAddress"] == "UpdatedAddress"
+    o = client.post("/order", json={"OrderDate": datetime.now().isoformat(),"Status":"Pending","CustomerID":cust["CustomerID"]}).json()
+    r = client.put(f"/order/{o['OrderID']}", json={"Status":"Completed"}).json()
+    assert r["Status"] == "Completed"
 
 def test_delete_order(client):
     cust = _register_customer(client, name="CustomerDel", email=f"{random.randint(1,1000)}@example.com")
-    o = client.post("/order", json={"OrderDate": datetime.now().isoformat(),"ShippingAddress":"AddressDel","Status":"Pending","CustomerID":cust["CustomerID"]}).json()
+    o = client.post("/order", json={"OrderDate": datetime.now().isoformat(),"Status":"Pending","CustomerID":cust["CustomerID"]}).json()
     r = client.delete(f"/order/{o['OrderID']}")
     assert r.status_code == 200
 
@@ -219,27 +224,27 @@ def test_delete_order(client):
 # ======================================================
 def test_create_payment(client):
     cust = _register_customer(client, name="CustomerPay", email=f"{random.randint(1,1000)}@example.com")
-    o = client.post("/order", json={"OrderDate": datetime.now().isoformat(),"ShippingAddress":"AddressPay","Status":"Pending","CustomerID":cust["CustomerID"]}).json()
+    o = client.post("/order", json={"OrderDate": datetime.now().isoformat(),"Status":"Pending","CustomerID":cust["CustomerID"]}).json()
     r = client.post("/payment", json={"OrderID":o["OrderID"],"Status":"Pending","Amount":100,"PaymentDate":datetime.now().isoformat()}).json()
     assert r["Amount"] == 100
 
 def test_read_payment(client):
     cust = _register_customer(client, name="CustomerPayRead", email=f"{random.randint(1,1000)}@example.com")
-    o = client.post("/order", json={"OrderDate": datetime.now().isoformat(),"ShippingAddress":"AddressPayRead","Status":"Pending","CustomerID":cust["CustomerID"]}).json()
+    o = client.post("/order", json={"OrderDate": datetime.now().isoformat(),"Status":"Pending","CustomerID":cust["CustomerID"]}).json()
     p = client.post("/payment", json={"OrderID":o["OrderID"],"Status":"Pending","Amount":100,"PaymentDate":datetime.now().isoformat()}).json()
     r = client.get(f"/payment/{p['PaymentID']}")
     assert r.status_code == 200
 
 def test_update_payment(client):
     cust = _register_customer(client, name="CustomerPayUpdate", email=f"{random.randint(1,1000)}@example.com")
-    o = client.post("/order", json={"OrderDate": datetime.now().isoformat(),"ShippingAddress":"AddressPayUpdate","Status":"Pending","CustomerID":cust["CustomerID"]}).json()
+    o = client.post("/order", json={"OrderDate": datetime.now().isoformat(),"Status":"Pending","CustomerID":cust["CustomerID"]}).json()
     p = client.post("/payment", json={"OrderID":o["OrderID"],"Status":"Pending","Amount":100,"PaymentDate":datetime.now().isoformat()}).json()
     r = client.put(f"/payment/{p['PaymentID']}", json={"Amount":200}).json()
     assert r["Amount"] == 200
 
 def test_delete_payment(client):
     cust = _register_customer(client, name="CustomerPayDel", email=f"{random.randint(1,1000)}@example.com")
-    o = client.post("/order", json={"OrderDate": datetime.now().isoformat(),"ShippingAddress":"AddressPayDel","Status":"Pending","CustomerID":cust["CustomerID"]}).json()
+    o = client.post("/order", json={"OrderDate": datetime.now().isoformat(),"Status":"Pending","CustomerID":cust["CustomerID"]}).json()
     p = client.post("/payment", json={"OrderID":o["OrderID"],"Status":"Pending","Amount":100,"PaymentDate":datetime.now().isoformat()}).json()
     r = client.delete(f"/payment/{p['PaymentID']}")
     assert r.status_code == 200
@@ -251,16 +256,17 @@ def test_create_orderdetail(client):
     cust = _register_customer(client, name="CustomerOD", email=f"{random.randint(1,1000)}@example.com")
     s = client.post("/supplier", json={"SupplierName":"SupplierOD"}).json()
     prod = client.post("/product", json={"ProductName":"ProductOD","Price":10,"SupplierID":s["SupplierID"]}).json()
-    o = client.post("/order", json={"OrderDate": datetime.now().isoformat(),"ShippingAddress":"AddressOD","Status":"Pending","CustomerID":cust["CustomerID"]}).json()
-    od = client.post("/orderdetail", json={"OrderID":o["OrderID"],"ProductID":prod["ProductID"],"Quantity":2}).json()
+    o = client.post("/order", json={"OrderDate": datetime.now().isoformat(),"Status":"Pending","CustomerID":cust["CustomerID"]}).json()
+    od = client.post("/orderdetail", json={"OrderID":o["OrderID"],"ProductID":prod["ProductID"],"Quantity":2,"ShippingAddress":"AddressOD"}).json()
     assert od["Quantity"] == 2
+    assert od["ShippingAddress"] == "AddressOD"
 
 def test_read_orderdetail(client):
     cust = _register_customer(client, name="CustomerODRead", email=f"{random.randint(1,1000)}@example.com")
     s = client.post("/supplier", json={"SupplierName":"SupplierODRead"}).json()
     prod = client.post("/product", json={"ProductName":"ProductODRead","Price":10,"SupplierID":s["SupplierID"]}).json()
-    o = client.post("/order", json={"OrderDate": datetime.now().isoformat(),"ShippingAddress":"AddressODRead","Status":"Pending","CustomerID":cust["CustomerID"]}).json()
-    od = client.post("/orderdetail", json={"OrderID":o["OrderID"],"ProductID":prod["ProductID"],"Quantity":2}).json()
+    o = client.post("/order", json={"OrderDate": datetime.now().isoformat(),"Status":"Pending","CustomerID":cust["CustomerID"]}).json()
+    od = client.post("/orderdetail", json={"OrderID":o["OrderID"],"ProductID":prod["ProductID"],"Quantity":2,"ShippingAddress":"AddressODRead"}).json()
     r = client.get(f"/orderdetail/{od['OrderDetailID']}")
     assert r.status_code == 200
 
@@ -268,17 +274,18 @@ def test_update_orderdetail(client):
     cust = _register_customer(client, name="CustomerODUpdate", email=f"{random.randint(1,1000)}@example.com")
     s = client.post("/supplier", json={"SupplierName":"SupplierODUpdate"}).json()
     prod = client.post("/product", json={"ProductName":"ProductODUpdate","Price":10,"SupplierID":s["SupplierID"]}).json()
-    o = client.post("/order", json={"OrderDate": datetime.now().isoformat(),"ShippingAddress":"AddressODUpdate","Status":"Pending","CustomerID":cust["CustomerID"]}).json()
-    od = client.post("/orderdetail", json={"OrderID":o["OrderID"],"ProductID":prod["ProductID"],"Quantity":2}).json()
-    r = client.put(f"/orderdetail/{od['OrderDetailID']}", json={"Quantity":5}).json()
+    o = client.post("/order", json={"OrderDate": datetime.now().isoformat(),"Status":"Pending","CustomerID":cust["CustomerID"]}).json()
+    od = client.post("/orderdetail", json={"OrderID":o["OrderID"],"ProductID":prod["ProductID"],"Quantity":2,"ShippingAddress":"AddressODUpdate"}).json()
+    r = client.put(f"/orderdetail/{od['OrderDetailID']}", json={"Quantity":5,"ShippingAddress":"UpdatedODAddress"}).json()
     assert r["Quantity"] == 5
+    assert r["ShippingAddress"] == "UpdatedODAddress"
 
 def test_delete_orderdetail(client):
     cust = _register_customer(client, name="CustomerODDel", email=f"{random.randint(1,1000)}@example.com")
     s = client.post("/supplier", json={"SupplierName":"SupplierODDel"}).json()
     prod = client.post("/product", json={"ProductName":"ProductODDel","Price":10,"SupplierID":s["SupplierID"]}).json()
-    o = client.post("/order", json={"OrderDate": datetime.now().isoformat(),"ShippingAddress":"AddressODDel","Status":"Pending","CustomerID":cust["CustomerID"]}).json()
-    od = client.post("/orderdetail", json={"OrderID":o["OrderID"],"ProductID":prod["ProductID"],"Quantity":2}).json()
+    o = client.post("/order", json={"OrderDate": datetime.now().isoformat(),"Status":"Pending","CustomerID":cust["CustomerID"]}).json()
+    od = client.post("/orderdetail", json={"OrderID":o["OrderID"],"ProductID":prod["ProductID"],"Quantity":2,"ShippingAddress":"AddressODDel"}).json()
     r = client.delete(f"/orderdetail/{od['OrderDetailID']}")
     assert r.status_code == 200
 
@@ -287,14 +294,14 @@ def test_delete_orderdetail(client):
 # ======================================================
 def test_create_gift(client):
     cust = _register_customer(client, name="CustomerGift", email=f"{random.randint(1,1000)}@example.com")
-    o = client.post("/order", json={"OrderDate": datetime.now().isoformat(),"ShippingAddress":"AddressGift","Status":"Pending","CustomerID":cust["CustomerID"]}).json()
+    o = client.post("/order", json={"OrderDate": datetime.now().isoformat(),"Status":"Pending","CustomerID":cust["CustomerID"]}).json()
     p = client.post("/payment", json={"OrderID":o["OrderID"],"Status":"Pending","Amount":100,"PaymentDate":datetime.now().isoformat()}).json()
     g = client.post("/gift", json={"Amount":50,"Unit":"USD","Type":"Gift","PaymentID":p["PaymentID"]}).json()
     assert g["Amount"] == 50
 
 def test_read_gift(client):
     cust = _register_customer(client, name="CustomerGiftRead", email=f"{random.randint(1,1000)}@example.com")
-    o = client.post("/order", json={"OrderDate": datetime.now().isoformat(),"ShippingAddress":"AddressGiftRead","Status":"Pending","CustomerID":cust["CustomerID"]}).json()
+    o = client.post("/order", json={"OrderDate": datetime.now().isoformat(),"Status":"Pending","CustomerID":cust["CustomerID"]}).json()
     p = client.post("/payment", json={"OrderID":o["OrderID"],"Status":"Pending","Amount":100,"PaymentDate":datetime.now().isoformat()}).json()
     g = client.post("/gift", json={"Amount":50,"Unit":"USD","Type":"Gift","PaymentID":p["PaymentID"]}).json()
     r = client.get(f"/gift/{g['GiftID']}")
@@ -302,7 +309,7 @@ def test_read_gift(client):
 
 def test_update_gift(client):
     cust = _register_customer(client, name="CustomerGiftUpdate", email=f"{random.randint(1,1000)}@example.com")
-    o = client.post("/order", json={"OrderDate": datetime.now().isoformat(),"ShippingAddress":"AddressGiftUpdate","Status":"Pending","CustomerID":cust["CustomerID"]}).json()
+    o = client.post("/order", json={"OrderDate": datetime.now().isoformat(),"Status":"Pending","CustomerID":cust["CustomerID"]}).json()
     p = client.post("/payment", json={"OrderID":o["OrderID"],"Status":"Pending","Amount":100,"PaymentDate":datetime.now().isoformat()}).json()
     g = client.post("/gift", json={"Amount":50,"Unit":"USD","Type":"Gift","PaymentID":p["PaymentID"]}).json()
     r = client.put(f"/gift/{g['GiftID']}", json={"Amount":100}).json()
@@ -310,7 +317,7 @@ def test_update_gift(client):
 
 def test_delete_gift(client):
     cust = _register_customer(client, name="CustomerGiftDel", email=f"{random.randint(1,1000)}@example.com")
-    o = client.post("/order", json={"OrderDate": datetime.now().isoformat(),"ShippingAddress":"AddressGiftDel","Status":"Pending","CustomerID":cust["CustomerID"]}).json()
+    o = client.post("/order", json={"OrderDate": datetime.now().isoformat(),"Status":"Pending","CustomerID":cust["CustomerID"]}).json()
     p = client.post("/payment", json={"OrderID":o["OrderID"],"Status":"Pending","Amount":100,"PaymentDate":datetime.now().isoformat()}).json()
     g = client.post("/gift", json={"Amount":50,"Unit":"USD","Type":"Gift","PaymentID":p["PaymentID"]}).json()
     r = client.delete(f"/gift/{g['GiftID']}")

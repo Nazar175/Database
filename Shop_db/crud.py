@@ -65,6 +65,7 @@ def create_supplier(
     address: str = None,
     phone: str = None,
     delivery_date=None,
+    role: str = "seller",
     owner_customer_id: int = None,
 ):
     supplier = models.Supplier(
@@ -72,6 +73,7 @@ def create_supplier(
         Address=address,
         Phone=phone,
         DeliveryDate=delivery_date,
+        Role=role,
         OwnerCustomerID=owner_customer_id,
     )
     db.add(supplier)
@@ -169,11 +171,10 @@ def delete_product(db: Session, product_id: int, owner_customer_id: int = None):
 
 
 # ---------- ORDERS ----------
-def create_order(db: Session, order_date, customer_id: int, shipping_address: str, Status: str = "Pending"):
+def create_order(db: Session, order_date, customer_id: int, Status: str = "Pending"):
     order = models.Orders(
         OrderDate=order_date,
         CustomerID=customer_id,
-        ShippingAddress=shipping_address,
         Status=Status,
     )
     db.add(order)
@@ -202,8 +203,6 @@ def update_order(db: Session, order_id: int, customer_id: int = None, **kwargs):
         return None
 
     field_map = {
-        "ShippingAddress": "ShippingAddress",
-        "shipping_address": "ShippingAddress",
         "Status": "Status",
         "status": "Status",
         "OrderDate": "OrderDate",
@@ -231,8 +230,19 @@ def delete_order(db: Session, order_id: int, customer_id: int = None):
 
 
 # ---------- ORDER DETAIL ----------
-def create_order_detail(db: Session, order_id: int, product_id: int, quantity: int = 1):
-    detail = models.OrderDetail(OrderID=order_id, ProductID=product_id, Quantity=quantity)
+def create_order_detail(
+    db: Session,
+    order_id: int,
+    product_id: int,
+    quantity: int = 1,
+    shipping_address: str | None = None,
+):
+    detail = models.OrderDetail(
+        OrderID=order_id,
+        ProductID=product_id,
+        Quantity=quantity,
+        ShippingAddress=shipping_address,
+    )
     db.add(detail)
     db.commit()
     db.refresh(detail)
@@ -261,8 +271,21 @@ def update_order_detail(db: Session, detail_id: int, customer_id: int = None, **
     detail = get_order_detail(db, detail_id, customer_id=customer_id)
     if not detail:
         return None
+
+    field_map = {
+        "Quantity": "Quantity",
+        "quantity": "Quantity",
+        "OrderID": "OrderID",
+        "order_id": "OrderID",
+        "ProductID": "ProductID",
+        "product_id": "ProductID",
+        "ShippingAddress": "ShippingAddress",
+        "shipping_address": "ShippingAddress",
+    }
+
     for key, value in kwargs.items():
-        setattr(detail, key, value)
+        if key in field_map:
+            setattr(detail, field_map[key], value)
     db.commit()
     db.refresh(detail)
     return detail

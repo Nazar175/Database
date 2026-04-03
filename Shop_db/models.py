@@ -49,6 +49,7 @@ class Supplier(Base):
     Address = Column(String(200))
     Phone = Column(String(20))
     DeliveryDate = Column(DateTime)
+    Role = Column(String(20), nullable=False, default="seller")
     OwnerCustomerID = Column(Integer, ForeignKey("Customer.CustomerID"), nullable=True)
 
     products = relationship("Product", back_populates="supplier")
@@ -73,7 +74,6 @@ class Orders(Base):
     OrderID = Column(Integer, primary_key=True, index=True)
     OrderDate = Column(DateTime, nullable=False)
     CustomerID = Column(Integer, ForeignKey("Customer.CustomerID"))
-    ShippingAddress = Column(String(200), nullable=False)
     Status = Column(Enum(OrderStatus), default=OrderStatus.Pending)
 
     customer = relationship("Customer", back_populates="orders")
@@ -89,6 +89,7 @@ class OrderDetail(Base):
     OrderID = Column(Integer, ForeignKey("Orders.OrderID"), nullable=False)
     ProductID = Column(Integer, ForeignKey("Product.ProductID"), nullable=False)
     Quantity = Column(Integer, nullable=False, default=1)
+    ShippingAddress = Column(String(200), nullable=True)
 
     order = relationship("Orders", back_populates="details")
     product = relationship("Product", back_populates="order_details")

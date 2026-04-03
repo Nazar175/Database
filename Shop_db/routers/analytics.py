@@ -16,7 +16,6 @@ def create_random_order_for_customer(db: Session, customer_id: int):
     order = Orders(
         CustomerID=customer_id,
         OrderDate=datetime.now(),
-        ShippingAddress=f"Address {random.randint(1,1000)}",
         Status="Pending",
     )
     db.add(order)
@@ -25,22 +24,23 @@ def create_random_order_for_customer(db: Session, customer_id: int):
 
     product = (
         db.query(Product)
-        .filter(Product.OwnerCustomerID == customer_id)
         .order_by(func.random())
         .first()
     )
 
+    order_detail = None
     if product:
         order_detail = OrderDetail(
             OrderID=order.OrderID,
             ProductID=product.ProductID,
             Quantity=random.randint(1, 5),
+            ShippingAddress=f"Address {random.randint(1,1000)}",
         )
         db.add(order_detail)
         db.commit()
         db.refresh(order_detail)
 
-    return order
+    return order, order_detail
 
 
 @router.post("/create-random-order/{customer_id}")
@@ -54,7 +54,7 @@ def create_random_order_endpoint(
     if not customer:
         raise HTTPException(status_code=404, detail="Customer not found")
 
-    order = create_random_order_for_customer(db, customer_id)
+    order, order_detail = create_random_order_for_customer(db, customer_id)
     return {
         "message": "Random order created successfully ✅",
         "order": {
@@ -64,7 +64,7 @@ def create_random_order_endpoint(
             "CustomerEmail": customer.Email,
             "OrderDate": order.OrderDate.isoformat(),
             "Status": order.Status,
-            "ShippingAddress": order.ShippingAddress,
+            "ShippingAddress": order_detail.ShippingAddress if order_detail else None,
         },
     }
 
