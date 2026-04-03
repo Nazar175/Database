@@ -1,12 +1,17 @@
-from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
-from database import get_db
-import crud, models
-from pydantic import BaseModel, condecimal, constr, Field
 from datetime import datetime
 from typing import List
 
+from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel, Field
+from sqlalchemy.orm import Session
+
+import crud
+import models
+from database import get_db
+from .customer import ensure_customer_scope, get_current_user
+
 router = APIRouter()
+
 
 # ---------- SCHEMAS ----------
 class Gift(BaseModel):
@@ -25,22 +30,36 @@ class Gift(BaseModel):
 
 # ---------- ROUTES ----------
 @router.get("/gift", response_model=List[Gift])
-def read_gifts(db: Session = Depends(get_db)):
-    return crud.get_gifts(db)
+def read_gifts(
+    db: Session = Depends(get_db),
+    current_user: models.Customer = Depends(get_current_user),
+):
+    return crud.get_gifts(db, customer_id=current_user.CustomerID)
 
 
 @router.get("/gift/{gift_id}", response_model=Gift)
-def read_gift(gift_id: int, db: Session = Depends(get_db)):
-    gift = crud.get_gift(db, gift_id)
+def read_gift(
+    gift_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.Customer = Depends(get_current_user),
+):
+    gift = crud.get_gift(db, gift_id, customer_id=current_user.CustomerID)
     if not gift:
         raise HTTPException(status_code=404, detail="Gift not found")
     return gift
 
 
 @router.post("/gift", response_model=Gift)
-def create_gift(gift: Gift, db: Session = Depends(get_db)):
-    if gift.paymentID and not crud.get_payment(db, gift.paymentID):
-        raise HTTPException(status_code=404, detail="Payment not found")
+def create_gift(
+    gift: Gift,
+    db: Session = Depends(get_db),
+    current_user: models.Customer = Depends(get_current_user),
+):
+    if gift.paymentID:
+        payment = crud.get_payment(db, gift.paymentID, customer_id=current_user.CustomerID)
+        if not payment:
+            raise HTTPException(status_code=404, detail="Payment not found")
+
     return crud.create_gift(
         db,
         amount=gift.amount,
@@ -52,39 +71,78 @@ def create_gift(gift: Gift, db: Session = Depends(get_db)):
 
 
 @router.put("/gift/{gift_id}", response_model=Gift)
-def update_gift(gift_id: int, gift: Gift, db: Session = Depends(get_db)):
-    db_gift = crud.get_gift(db, gift_id)
+def update_gift(
+    gift_id: int,
+    gift: Gift,
+    db: Session = Depends(get_db),
+    current_user: models.Customer = Depends(get_current_user),
+):
+    db_gift = crud.get_gift(db, gift_id, customer_id=current_user.CustomerID)
     if not db_gift:
         raise HTTPException(status_code=404, detail="Gift not found")
-    return crud.update_gift(db, gift_id, **gift.dict(by_alias=True, exclude_unset=True))
+
+    update_data = gift.dict(by_alias=True, exclude_unset=True)
+
+    if "PaymentID" in update_data:
+        payment = crud.get_payment(db, update_data["PaymentID"], customer_id=current_user.CustomerID)
+        if not payment:
+            raise HTTPException(status_code=404, detail="Payment not found")
+
+    return crud.update_gift(db, gift_id, customer_id=current_user.CustomerID, **update_data)
 
 
 @router.delete("/gift/{gift_id}")
-def delete_gift(gift_id: int, db: Session = Depends(get_db)):
-    if not crud.delete_gift(db, gift_id):
+def delete_gift(
+    gift_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.Customer = Depends(get_current_user),
+):
+    if not crud.delete_gift(db, gift_id, customer_id=current_user.CustomerID):
         raise HTTPException(status_code=404, detail="Gift not found")
     return {"message": "Gift deleted successfully"}
 
 
 # ---------- HIERARCHICAL ----------
 @router.get("/customer/{customer_id}/orders/{order_id}/payment/{payment_id}/gifts")
-def get_gifts_by_payment(customer_id: int, order_id: int, payment_id: int, db: Session = Depends(get_db)):
-    order = crud.get_order(db, order_id)
-    if not order or order.CustomerID != customer_id:
+def get_gifts_by_payment(
+    customer_id: int,
+    order_id: int,
+    payment_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.Customer = Depends(get_current_user),
+):
+    ensure_customer_scope(customer_id, current_user)
+
+    order = crud.get_order(db, order_id, customer_id=customer_id)
+    if not order:
         raise HTTPException(status_code=404, detail="Order not found for this customer")
-    payment = crud.get_payment(db, payment_id)
+
+    payment = crud.get_payment(db, payment_id, customer_id=customer_id)
     if not payment or payment.OrderID != order_id:
         raise HTTPException(status_code=404, detail="Payment not found for this order")
-    return [g for g in crud.get_gifts(db) if g.PaymentID == payment_id]
+
+    return [g for g in crud.get_gifts(db, customer_id=customer_id) if g.PaymentID == payment_id]
+
 
 @router.post("/customer/{customer_id}/orders/{order_id}/payment/{payment_id}/gift", response_model=Gift)
-def create_gift_for_payment(customer_id: int, order_id: int, payment_id: int, gift: Gift, db: Session = Depends(get_db)):
-    order = crud.get_order(db, order_id)
-    if not order or order.CustomerID != customer_id:
+def create_gift_for_payment(
+    customer_id: int,
+    order_id: int,
+    payment_id: int,
+    gift: Gift,
+    db: Session = Depends(get_db),
+    current_user: models.Customer = Depends(get_current_user),
+):
+    ensure_customer_scope(customer_id, current_user)
+
+    order = crud.get_order(db, order_id, customer_id=customer_id)
+    if not order:
         raise HTTPException(status_code=404, detail="Order not found for this customer")
-    payment = crud.get_payment(db, payment_id)
+
+    payment = crud.get_payment(db, payment_id, customer_id=customer_id)
     if not payment or payment.OrderID != order_id:
         raise HTTPException(status_code=404, detail="Payment not found for this order")
+
     return crud.create_gift(
         db,
         amount=gift.amount,
@@ -94,30 +152,63 @@ def create_gift_for_payment(customer_id: int, order_id: int, payment_id: int, gi
         payment_id=payment_id,
     )
 
+
 @router.put("/customer/{customer_id}/orders/{order_id}/payment/{payment_id}/gift/{gift_id}", response_model=Gift)
-def update_gift_for_payment(customer_id: int, order_id: int, payment_id: int, gift_id: int, gift: Gift, db: Session = Depends(get_db)):
-    order = crud.get_order(db, order_id)
-    if not order or order.CustomerID != customer_id:
+def update_gift_for_payment(
+    customer_id: int,
+    order_id: int,
+    payment_id: int,
+    gift_id: int,
+    gift: Gift,
+    db: Session = Depends(get_db),
+    current_user: models.Customer = Depends(get_current_user),
+):
+    ensure_customer_scope(customer_id, current_user)
+
+    order = crud.get_order(db, order_id, customer_id=customer_id)
+    if not order:
         raise HTTPException(status_code=404, detail="Order not found for this customer")
-    payment = crud.get_payment(db, payment_id)
+
+    payment = crud.get_payment(db, payment_id, customer_id=customer_id)
     if not payment or payment.OrderID != order_id:
         raise HTTPException(status_code=404, detail="Payment not found for this order")
-    db_gift = crud.get_gift(db, gift_id)
+
+    db_gift = crud.get_gift(db, gift_id, customer_id=customer_id)
     if not db_gift or db_gift.PaymentID != payment_id:
         raise HTTPException(status_code=404, detail="Gift not found for this payment")
-    return crud.update_gift(db, gift_id, **gift.dict(exclude_unset=True))
+
+    return crud.update_gift(
+        db,
+        gift_id,
+        customer_id=customer_id,
+        **gift.dict(exclude_unset=True),
+    )
+
 
 @router.delete("/customer/{customer_id}/orders/{order_id}/payment/{payment_id}/gift/{gift_id}")
-def delete_gift_for_payment(customer_id: int, order_id: int, payment_id: int, gift_id: int, db: Session = Depends(get_db)):
-    order = crud.get_order(db, order_id)
-    if not order or order.CustomerID != customer_id:
+def delete_gift_for_payment(
+    customer_id: int,
+    order_id: int,
+    payment_id: int,
+    gift_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.Customer = Depends(get_current_user),
+):
+    ensure_customer_scope(customer_id, current_user)
+
+    order = crud.get_order(db, order_id, customer_id=customer_id)
+    if not order:
         raise HTTPException(status_code=404, detail="Order not found for this customer")
-    payment = crud.get_payment(db, payment_id)
+
+    payment = crud.get_payment(db, payment_id, customer_id=customer_id)
     if not payment or payment.OrderID != order_id:
         raise HTTPException(status_code=404, detail="Payment not found for this order")
-    db_gift = crud.get_gift(db, gift_id)
+
+    db_gift = crud.get_gift(db, gift_id, customer_id=customer_id)
     if not db_gift or db_gift.PaymentID != payment_id:
         raise HTTPException(status_code=404, detail="Gift not found for this payment")
-    if not crud.delete_gift(db, gift_id):
+
+    if not crud.delete_gift(db, gift_id, customer_id=customer_id):
         raise HTTPException(status_code=404, detail="Gift not found")
+
     return {"message": "Gift deleted successfully"}

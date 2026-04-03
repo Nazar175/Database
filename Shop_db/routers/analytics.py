@@ -1,44 +1,60 @@
 import random
 from datetime import datetime
+
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
 from sqlalchemy import func
+from sqlalchemy.orm import Session
+
 from database import get_db
-from models import OrderDetail, Product, Orders, Customer
+from models import Customer, OrderDetail, Orders, Product
+from .customer import ensure_customer_scope, get_current_user, is_admin
 
 router = APIRouter(prefix="/analytics", tags=["Analytics"])
+
 
 def create_random_order_for_customer(db: Session, customer_id: int):
     order = Orders(
         CustomerID=customer_id,
         OrderDate=datetime.now(),
-        ShippingAddress=f"Address {random.randint(1,1000)}",
-        Status="Pending"
+        Status="Pending",
     )
     db.add(order)
     db.commit()
     db.refresh(order)
 
-    product = db.query(Product).order_by(func.random()).first()
+    product = (
+        db.query(Product)
+        .order_by(func.random())
+        .first()
+    )
+
+    order_detail = None
     if product:
         order_detail = OrderDetail(
             OrderID=order.OrderID,
             ProductID=product.ProductID,
-            Quantity=random.randint(1, 5)
+            Quantity=random.randint(1, 5),
+            ShippingAddress=f"Address {random.randint(1,1000)}",
         )
         db.add(order_detail)
         db.commit()
         db.refresh(order_detail)
 
-    return order
+    return order, order_detail
+
 
 @router.post("/create-random-order/{customer_id}")
-def create_random_order_endpoint(customer_id: int, db: Session = Depends(get_db)):
+def create_random_order_endpoint(
+    customer_id: int,
+    db: Session = Depends(get_db),
+    current_user: Customer = Depends(get_current_user),
+):
+    ensure_customer_scope(customer_id, current_user)
     customer = db.query(Customer).filter(Customer.CustomerID == customer_id).first()
     if not customer:
         raise HTTPException(status_code=404, detail="Customer not found")
 
-    order = create_random_order_for_customer(db, customer_id)
+    order, order_detail = create_random_order_for_customer(db, customer_id)
     return {
         "message": "Random order created successfully ✅",
         "order": {
@@ -48,28 +64,33 @@ def create_random_order_endpoint(customer_id: int, db: Session = Depends(get_db)
             "CustomerEmail": customer.Email,
             "OrderDate": order.OrderDate.isoformat(),
             "Status": order.Status,
-            "ShippingAddress": order.ShippingAddress
-        }
+            "ShippingAddress": order_detail.ShippingAddress if order_detail else None,
+        },
     }
 
 
 @router.get("/orders-summary")
-def get_order_summary(db: Session = Depends(get_db)):
+def get_order_summary(
+    db: Session = Depends(get_db),
+    current_user: Customer = Depends(get_current_user),
+):
     try:
-        results = (
+        query = (
             db.query(
                 Orders.OrderID,
                 Orders.OrderDate,
                 Customer.Name.label("CustomerName"),
                 Orders.Status,
-                func.sum(OrderDetail.Quantity * Product.Price).label("total_amount")
+                func.sum(OrderDetail.Quantity * Product.Price).label("total_amount"),
             )
             .join(OrderDetail, OrderDetail.OrderID == Orders.OrderID)
             .join(Product, Product.ProductID == OrderDetail.ProductID)
             .join(Customer, Customer.CustomerID == Orders.CustomerID)
             .group_by(Orders.OrderID, Orders.OrderDate, Customer.Name, Orders.Status)
-            .all()
         )
+        if not is_admin(current_user):
+            query = query.filter(Orders.CustomerID == current_user.CustomerID)
+        results = query.all()
 
         summary = [
             {
@@ -77,7 +98,7 @@ def get_order_summary(db: Session = Depends(get_db)):
                 "OrderDate": r.OrderDate.isoformat(),
                 "CustomerName": r.CustomerName,
                 "Status": r.Status,
-                "total_amount": float(r.total_amount)
+                "total_amount": float(r.total_amount),
             }
             for r in results
         ]
