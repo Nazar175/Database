@@ -61,6 +61,7 @@ class Product(Base):
     ProductID = Column(Integer, primary_key=True, index=True)
     ProductName = Column(String(100), nullable=False)
     Price = Column(DECIMAL(10, 2), nullable=False)
+    AvailableQuantity = Column(Integer, nullable=False, default=0)
     SupplierID = Column(Integer, ForeignKey("Supplier.SupplierID"))
     OwnerCustomerID = Column(Integer, ForeignKey("Customer.CustomerID"), nullable=True)
 

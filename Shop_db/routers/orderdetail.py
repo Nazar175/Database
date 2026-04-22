@@ -17,7 +17,7 @@ class OrderDetail(BaseModel):
     OrderDetailID: int | None = None
     OrderID: int | None = None
     ProductID: int | None = None
-    quantity: int | None = Field(None, alias="Quantity")
+    quantity: int | None = Field(None, alias="Quantity", ge=1)
     shippingAddress: str | None = Field(None, alias="ShippingAddress")
 
     model_config = {
@@ -58,13 +58,16 @@ def create_detail(
     if not order or not product:
         raise HTTPException(status_code=404, detail="Order or Product not found")
 
-    return crud.create_order_detail(
-        db,
-        detail.OrderID,
-        detail.ProductID,
-        detail.quantity,
-        detail.shippingAddress,
-    )
+    try:
+        return crud.create_order_detail(
+            db,
+            detail.OrderID,
+            detail.ProductID,
+            detail.quantity,
+            detail.shippingAddress,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
 
 
 @router.put("/orderdetail/{orderdetail_id}", response_model=OrderDetail)
@@ -90,12 +93,15 @@ def update_detail(
         if not product:
             raise HTTPException(status_code=404, detail="Product not found")
 
-    return crud.update_order_detail(
-        db,
-        orderdetail_id,
-        customer_id=current_user.CustomerID,
-        **update_data,
-    )
+    try:
+        return crud.update_order_detail(
+            db,
+            orderdetail_id,
+            customer_id=current_user.CustomerID,
+            **update_data,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
 
 
 @router.delete("/orderdetail/{orderdetail_id}")
@@ -141,13 +147,16 @@ def create_detail_for_order(
     if not order or not product:
         raise HTTPException(status_code=404, detail="Order or Product not found for this customer")
 
-    return crud.create_order_detail(
-        db,
-        order_id,
-        detail.ProductID,
-        detail.quantity,
-        detail.shippingAddress,
-    )
+    try:
+        return crud.create_order_detail(
+            db,
+            order_id,
+            detail.ProductID,
+            detail.quantity,
+            detail.shippingAddress,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
 
 
 @router.put("/customer/{customer_id}/orders/{order_id}/orderdetail/{detail_id}", response_model=OrderDetail)
@@ -173,7 +182,10 @@ def update_detail_for_order(
         if not product:
             raise HTTPException(status_code=404, detail="Product not found")
 
-    return crud.update_order_detail(db, detail_id, customer_id=customer_id, **update_data)
+    try:
+        return crud.update_order_detail(db, detail_id, customer_id=customer_id, **update_data)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
 
 
 @router.delete("/customer/{customer_id}/orders/{order_id}/orderdetail/{detail_id}")

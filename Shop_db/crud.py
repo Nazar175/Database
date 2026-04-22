@@ -122,11 +122,17 @@ def create_product(
     name: str,
     Price: float,
     supplier_id: int = None,
+    available_quantity: int = 0,
     owner_customer_id: int = None,
 ):
+    normalized_quantity = int(available_quantity or 0)
+    if normalized_quantity < 0:
+        raise ValueError("Available quantity must be greater than or equal to 0")
+
     product = models.Product(
         ProductName=name,
         Price=Price,
+        AvailableQuantity=normalized_quantity,
         SupplierID=supplier_id,
         OwnerCustomerID=owner_customer_id,
     )
@@ -155,6 +161,11 @@ def update_product(db: Session, product_id: int, owner_customer_id: int = None, 
     if not product:
         return None
     for key, value in kwargs.items():
+        if key == "AvailableQuantity":
+            normalized_quantity = int(value)
+            if normalized_quantity < 0:
+                raise ValueError("Available quantity must be greater than or equal to 0")
+            value = normalized_quantity
         setattr(product, key, value)
     db.commit()
     db.refresh(product)
@@ -230,6 +241,13 @@ def delete_order(db: Session, order_id: int, customer_id: int = None):
 
 
 # ---------- ORDER DETAIL ----------
+def _normalize_order_quantity(quantity: int | None) -> int:
+    normalized = 1 if quantity is None else int(quantity)
+    if normalized <= 0:
+        raise ValueError("Quantity must be greater than 0")
+    return normalized
+
+
 def create_order_detail(
     db: Session,
     order_id: int,
@@ -237,10 +255,21 @@ def create_order_detail(
     quantity: int = 1,
     shipping_address: str | None = None,
 ):
+    normalized_quantity = _normalize_order_quantity(quantity)
+    product = db.query(models.Product).filter(models.Product.ProductID == product_id).first()
+    if not product:
+        return None
+
+    available_quantity = int(getattr(product, "AvailableQuantity", 0) or 0)
+    if available_quantity < normalized_quantity:
+        raise ValueError("Not enough product quantity available")
+
+    product.AvailableQuantity = available_quantity - normalized_quantity
+
     detail = models.OrderDetail(
         OrderID=order_id,
         ProductID=product_id,
-        Quantity=quantity,
+        Quantity=normalized_quantity,
         ShippingAddress=shipping_address,
     )
     db.add(detail)
@@ -283,9 +312,47 @@ def update_order_detail(db: Session, detail_id: int, customer_id: int = None, **
         "shipping_address": "ShippingAddress",
     }
 
+    update_data: dict[str, object] = {}
     for key, value in kwargs.items():
         if key in field_map:
-            setattr(detail, field_map[key], value)
+            update_data[field_map[key]] = value
+
+    old_product_id = detail.ProductID
+    old_quantity = int(detail.Quantity or 0)
+    raw_new_product_id = update_data.get("ProductID", old_product_id)
+    if raw_new_product_id is None:
+        raise ValueError("ProductID cannot be null")
+    new_product_id = int(raw_new_product_id)
+    new_quantity = _normalize_order_quantity(update_data.get("Quantity", old_quantity))
+
+    old_product = db.query(models.Product).filter(models.Product.ProductID == old_product_id).first()
+    target_product = db.query(models.Product).filter(models.Product.ProductID == new_product_id).first()
+    if not target_product:
+        return None
+
+    if new_product_id != old_product_id:
+        if old_product:
+            old_product.AvailableQuantity = int(getattr(old_product, "AvailableQuantity", 0) or 0) + old_quantity
+
+        target_available = int(getattr(target_product, "AvailableQuantity", 0) or 0)
+        if target_available < new_quantity:
+            raise ValueError("Not enough product quantity available")
+        target_product.AvailableQuantity = target_available - new_quantity
+    else:
+        delta = new_quantity - old_quantity
+        current_available = int(getattr(target_product, "AvailableQuantity", 0) or 0)
+        if delta > 0:
+            if current_available < delta:
+                raise ValueError("Not enough product quantity available")
+            target_product.AvailableQuantity = current_available - delta
+        elif delta < 0:
+            target_product.AvailableQuantity = current_available + abs(delta)
+
+    update_data["Quantity"] = new_quantity
+    update_data["ProductID"] = new_product_id
+    for key, value in update_data.items():
+        setattr(detail, key, value)
+
     db.commit()
     db.refresh(detail)
     return detail
@@ -295,6 +362,11 @@ def delete_order_detail(db: Session, detail_id: int, customer_id: int = None):
     detail = get_order_detail(db, detail_id, customer_id=customer_id)
     if not detail:
         return None
+
+    product = db.query(models.Product).filter(models.Product.ProductID == detail.ProductID).first()
+    if product:
+        product.AvailableQuantity = int(getattr(product, "AvailableQuantity", 0) or 0) + int(detail.Quantity or 0)
+
     db.delete(detail)
     db.commit()
     return detail

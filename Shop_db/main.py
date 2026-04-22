@@ -102,6 +102,11 @@ _ensure_column(
     ddl="ALTER TABLE Product ADD COLUMN OwnerCustomerID INT NULL",
 )
 _ensure_column(
+    table_name="Product",
+    column_name="AvailableQuantity",
+    ddl="ALTER TABLE Product ADD COLUMN AvailableQuantity INT NOT NULL DEFAULT 0",
+)
+_ensure_column(
     table_name="OrderDetail",
     column_name="ShippingAddress",
     ddl="ALTER TABLE OrderDetail ADD COLUMN ShippingAddress VARCHAR(200) NULL",

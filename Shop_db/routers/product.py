@@ -6,7 +6,7 @@ from urllib.error import HTTPError, URLError
 from urllib.request import urlopen
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, condecimal, constr
+from pydantic import BaseModel, Field, condecimal, constr
 from sqlalchemy.orm import Session
 
 import crud
@@ -100,6 +100,7 @@ def _calculate_approx_prices(price_uah: Decimal | float | int | str) -> tuple[De
 class ProductBase(BaseModel):
     ProductName: constr(min_length=2, max_length=100)
     Price: condecimal(gt=0)
+    AvailableQuantity: int = Field(default=0, ge=0)
     SupplierID: int | None = None
 
 
@@ -169,10 +170,11 @@ def create_product(
             raise HTTPException(status_code=404, detail="Supplier not found")
 
     new_product = crud.create_product(
-        db,
-        product.ProductName,
-        product.Price,
-        product.SupplierID,
+        db=db,
+        name=product.ProductName,
+        Price=product.Price,
+        supplier_id=product.SupplierID,
+        available_quantity=product.AvailableQuantity,
         owner_customer_id=owner_scope if is_admin(current_user) else current_user.CustomerID,
     )
     db.refresh(new_product)
@@ -199,12 +201,15 @@ def update_product(
         if not supplier:
             raise HTTPException(status_code=404, detail="Supplier not found")
 
-    updated = crud.update_product(
-        db,
-        product_id,
-        owner_customer_id=owner_scope,
-        **update_data,
-    )
+    try:
+        updated = crud.update_product(
+            db,
+            product_id,
+            owner_customer_id=owner_scope,
+            **update_data,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
     db.refresh(updated)
     return ProductRead.from_orm(updated).model_dump()
 
@@ -271,10 +276,11 @@ def create_product_for_order_detail(
             raise HTTPException(status_code=404, detail="Supplier not found")
 
     new_product = crud.create_product(
-        db,
-        product.ProductName,
-        product.Price,
-        product.SupplierID,
+        db=db,
+        name=product.ProductName,
+        Price=product.Price,
+        supplier_id=product.SupplierID,
+        available_quantity=product.AvailableQuantity,
         owner_customer_id=owner_scope if is_admin(current_user) else current_user.CustomerID,
     )
 
@@ -312,12 +318,15 @@ def update_product_for_order_detail(
         if not supplier:
             raise HTTPException(status_code=404, detail="Supplier not found")
 
-    updated = crud.update_product(
-        db,
-        db_product.ProductID,
-        owner_customer_id=owner_scope,
-        **update_data,
-    )
+    try:
+        updated = crud.update_product(
+            db,
+            db_product.ProductID,
+            owner_customer_id=owner_scope,
+            **update_data,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
     return updated
 
 
@@ -343,7 +352,8 @@ def delete_product_for_order_detail(
     if not db_product:
         raise HTTPException(status_code=404, detail="Product not found")
 
-    crud.update_order_detail(db, detail_id, customer_id=customer_id, ProductID=None)
+    if not crud.delete_order_detail(db, detail_id, customer_id=customer_id):
+        raise HTTPException(status_code=404, detail="OrderDetail not found")
 
     if not crud.delete_product(db, db_product.ProductID, owner_customer_id=owner_scope):
         raise HTTPException(status_code=404, detail="Product not found")

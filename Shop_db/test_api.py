@@ -169,6 +169,7 @@ def test_create_product(client):
     s = client.post("/supplier", json={"SupplierName":"SupplierProd"}).json()
     p = client.post("/product", json={"ProductName":"ProductX","Price":10,"SupplierID":s["SupplierID"]}).json()
     assert p["ProductName"] == "ProductX"
+    assert "AvailableQuantity" in p
 
 def test_read_product(client):
     s = client.post("/supplier", json={"SupplierName":"SupplierReadProd"}).json()
@@ -191,6 +192,24 @@ def test_delete_product(client):
     p = client.post("/product", json={"ProductName":"ProductDel","Price":40,"SupplierID":s["SupplierID"]}).json()
     r = client.delete(f"/product/{p['ProductID']}")
     assert r.status_code == 200
+
+
+def test_orderdetail_decreases_product_available_quantity(client):
+    s = client.post("/supplier", json={"SupplierName":"SupplierStock"}).json()
+    p = client.post(
+        "/product",
+        json={"ProductName": "iPhone", "Price": 1000, "SupplierID": s["SupplierID"], "AvailableQuantity": 5},
+    ).json()
+
+    o = client.post("/order", json={"OrderDate": datetime.now().isoformat(), "Status": "Pending", "CustomerID": 1}).json()
+    od = client.post(
+        "/orderdetail",
+        json={"OrderID": o["OrderID"], "ProductID": p["ProductID"], "Quantity": 3, "ShippingAddress": "Kyiv"},
+    )
+    assert od.status_code == 200
+
+    updated_product = client.get(f"/product/{p['ProductID']}").json()
+    assert updated_product["AvailableQuantity"] == 2
 
 # ======================================================
 # ORDER TESTS

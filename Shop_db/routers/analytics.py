@@ -5,8 +5,9 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
+import crud
 from database import get_db
-from models import Customer, OrderDetail, Orders, Product
+from models import Customer, Orders, Product
 from .customer import ensure_customer_scope, get_current_user, is_admin
 
 router = APIRouter(prefix="/analytics", tags=["Analytics"])
@@ -24,21 +25,25 @@ def create_random_order_for_customer(db: Session, customer_id: int):
 
     product = (
         db.query(Product)
+        .filter(Product.AvailableQuantity > 0)
         .order_by(func.random())
         .first()
     )
 
     order_detail = None
     if product:
-        order_detail = OrderDetail(
-            OrderID=order.OrderID,
-            ProductID=product.ProductID,
-            Quantity=random.randint(1, 5),
-            ShippingAddress=f"Address {random.randint(1,1000)}",
-        )
-        db.add(order_detail)
-        db.commit()
-        db.refresh(order_detail)
+        target_quantity = min(random.randint(1, 5), int(product.AvailableQuantity or 0))
+        if target_quantity > 0:
+            try:
+                order_detail = crud.create_order_detail(
+                    db=db,
+                    order_id=order.OrderID,
+                    product_id=product.ProductID,
+                    quantity=target_quantity,
+                    shipping_address=f"Address {random.randint(1,1000)}",
+                )
+            except ValueError:
+                order_detail = None
 
     return order, order_detail
 
