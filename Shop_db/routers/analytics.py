@@ -1,16 +1,41 @@
 import random
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 import crud
 from database import get_db
-from models import Customer, Orders, Product
-from .customer import ensure_customer_scope, get_current_user, is_admin
+from models import Customer, OrderDetail, Orders, Product
+from .customer import ensure_customer_scope, get_current_user, is_admin, is_seller
 
 router = APIRouter(prefix="/analytics", tags=["Analytics"])
+
+
+class SellerAnalyticsSummary(BaseModel):
+    SellerCustomerID: int
+    OwnedProductsCount: int
+    SoldUnits: int
+    SalesAmount: float
+    OrdersWithSales: int
+    CompletedOrders: int
+    PendingOrders: int
+    ShippedOrders: int
+    CancelledOrders: int
+
+
+class SellerTopProduct(BaseModel):
+    ProductID: int
+    ProductName: str
+    SoldUnits: int
+    SalesAmount: float
+
+
+def _ensure_seller_only(db: Session, current_user: Customer) -> None:
+    if not is_seller(db, current_user):
+        raise HTTPException(status_code=403, detail="Only sellers can access seller analytics")
 
 
 def create_random_order_for_customer(db: Session, customer_id: int):
@@ -46,6 +71,112 @@ def create_random_order_for_customer(db: Session, customer_id: int):
                 order_detail = None
 
     return order, order_detail
+
+
+@router.get("/seller/summary", response_model=SellerAnalyticsSummary)
+def get_seller_summary(
+    db: Session = Depends(get_db),
+    current_user: Customer = Depends(get_current_user),
+):
+    _ensure_seller_only(db, current_user)
+    seller_id = current_user.CustomerID
+
+    owned_products_count = (
+        db.query(func.count(Product.ProductID))
+        .filter(Product.OwnerCustomerID == seller_id)
+        .scalar()
+        or 0
+    )
+
+    sales_totals = (
+        db.query(
+            func.coalesce(func.sum(OrderDetail.Quantity), 0).label("sold_units"),
+            func.coalesce(func.sum(OrderDetail.Quantity * Product.Price), 0).label("sales_amount"),
+            func.count(func.distinct(Orders.OrderID)).label("orders_with_sales"),
+        )
+        .join(Product, Product.ProductID == OrderDetail.ProductID)
+        .join(Orders, Orders.OrderID == OrderDetail.OrderID)
+        .filter(Product.OwnerCustomerID == seller_id)
+        .first()
+    )
+
+    sold_units = int(sales_totals.sold_units or 0)
+    sales_amount = float(sales_totals.sales_amount or 0.0)
+    orders_with_sales = int(sales_totals.orders_with_sales or 0)
+
+    status_rows = (
+        db.query(
+            Orders.Status.label("status"),
+            func.count(func.distinct(Orders.OrderID)).label("orders_count"),
+        )
+        .join(OrderDetail, OrderDetail.OrderID == Orders.OrderID)
+        .join(Product, Product.ProductID == OrderDetail.ProductID)
+        .filter(Product.OwnerCustomerID == seller_id)
+        .group_by(Orders.Status)
+        .all()
+    )
+
+    status_counts = {
+        "pending": 0,
+        "shipped": 0,
+        "completed": 0,
+        "cancelled": 0,
+    }
+    for row in status_rows:
+        status_value = row.status.value if hasattr(row.status, "value") else str(row.status)
+        normalized_status = status_value.lower()
+        if normalized_status in status_counts:
+            status_counts[normalized_status] = int(row.orders_count or 0)
+
+    return SellerAnalyticsSummary(
+        SellerCustomerID=seller_id,
+        OwnedProductsCount=int(owned_products_count),
+        SoldUnits=sold_units,
+        SalesAmount=sales_amount,
+        OrdersWithSales=orders_with_sales,
+        CompletedOrders=status_counts["completed"],
+        PendingOrders=status_counts["pending"],
+        ShippedOrders=status_counts["shipped"],
+        CancelledOrders=status_counts["cancelled"],
+    )
+
+
+@router.get("/seller/top-products", response_model=list[SellerTopProduct])
+def get_seller_top_products(
+    limit: int = Query(default=5, ge=1, le=50),
+    db: Session = Depends(get_db),
+    current_user: Customer = Depends(get_current_user),
+):
+    _ensure_seller_only(db, current_user)
+    seller_id = current_user.CustomerID
+
+    sold_units_expr = func.coalesce(func.sum(OrderDetail.Quantity), 0)
+    sales_amount_expr = func.coalesce(func.sum(OrderDetail.Quantity * Product.Price), 0)
+
+    top_products = (
+        db.query(
+            Product.ProductID,
+            Product.ProductName,
+            sold_units_expr.label("sold_units"),
+            sales_amount_expr.label("sales_amount"),
+        )
+        .outerjoin(OrderDetail, OrderDetail.ProductID == Product.ProductID)
+        .filter(Product.OwnerCustomerID == seller_id)
+        .group_by(Product.ProductID, Product.ProductName)
+        .order_by(sold_units_expr.desc(), Product.ProductID.asc())
+        .limit(limit)
+        .all()
+    )
+
+    return [
+        SellerTopProduct(
+            ProductID=row.ProductID,
+            ProductName=row.ProductName,
+            SoldUnits=int(row.sold_units or 0),
+            SalesAmount=float(row.sales_amount or 0.0),
+        )
+        for row in top_products
+    ]
 
 
 @router.post("/create-random-order/{customer_id}")

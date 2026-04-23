@@ -69,6 +69,7 @@ def _register_customer(
     phone: str = "1234567",
     country: str = "UA",
     password: str = "002233Tt",
+    role: str = "user",
 ):
     response = client.post(
         "/register",
@@ -78,6 +79,7 @@ def _register_customer(
             "password": password,
             "phone": phone,
             "country": country,
+            "role": role,
         },
     )
     assert response.status_code == 200
@@ -88,7 +90,23 @@ def _register_customer(
         "Email": email,
         "Phone": phone,
         "Country": country,
+        "SupplierID": payload.get("supplier_id"),
     }
+
+
+def _override_current_user(customer_id: int, name: str, email: str, role: str = "user"):
+    from models import Customer
+
+    def override_get_current_user():
+        return Customer(
+            CustomerID=customer_id,
+            Name=name,
+            Email=email,
+            Role=role,
+            password_hash="fakehash",
+        )
+
+    app.dependency_overrides[get_current_user] = override_get_current_user
 
 # ======================================================
 # CUSTOMER TESTS
@@ -387,5 +405,94 @@ def test_order_summary_analytics(client):
         assert "OrderID" in row
         assert "CustomerName" in row
         assert "Status" in row
-        assert "OrderDate" in row   
+        assert "OrderDate" in row
+
+
+def test_seller_analytics_summary_and_top_products(client):
+    seller = _register_customer(
+        client,
+        name=f"seller_{random.randint(1,10000)}",
+        email=f"seller_{random.randint(1,10000)}@example.com",
+        role="seller",
+    )
+    assert seller["SupplierID"] is not None
+
+    _override_current_user(
+        customer_id=seller["CustomerID"],
+        name=seller["Name"],
+        email=seller["Email"],
+        role="user",
+    )
+
+    product = client.post(
+        "/product",
+        json={
+            "ProductName": "Seller iPhone",
+            "Price": 1000,
+            "SupplierID": seller["SupplierID"],
+            "AvailableQuantity": 10,
+        },
+    ).json()
+
+    order_completed = client.post(
+        "/order",
+        json={"OrderDate": datetime.now().isoformat(), "Status": "Pending"},
+    ).json()
+    create_detail_completed = client.post(
+        "/orderdetail",
+        json={
+            "OrderID": order_completed["OrderID"],
+            "ProductID": product["ProductID"],
+            "Quantity": 3,
+            "ShippingAddress": "Seller Address",
+        },
+    )
+    assert create_detail_completed.status_code == 200
+
+    order_pending = client.post(
+        "/order",
+        json={"OrderDate": datetime.now().isoformat(), "Status": "Pending"},
+    ).json()
+    create_detail_pending = client.post(
+        "/orderdetail",
+        json={
+            "OrderID": order_pending["OrderID"],
+            "ProductID": product["ProductID"],
+            "Quantity": 1,
+            "ShippingAddress": "Seller Address 2",
+        },
+    )
+    assert create_detail_pending.status_code == 200
+
+    update_order_completed = client.put(
+        f"/order/{order_completed['OrderID']}",
+        json={"Status": "Completed"},
+    )
+    assert update_order_completed.status_code == 200
+
+    summary_response = client.get("/analytics/seller/summary")
+    assert summary_response.status_code == 200
+    summary = summary_response.json()
+    assert summary["SellerCustomerID"] == seller["CustomerID"]
+    assert summary["OwnedProductsCount"] == 1
+    assert summary["SoldUnits"] == 4
+    assert summary["SalesAmount"] == 4000.0
+    assert summary["OrdersWithSales"] == 2
+    assert summary["CompletedOrders"] == 1
+    assert summary["PendingOrders"] == 1
+    assert summary["ShippedOrders"] == 0
+    assert summary["CancelledOrders"] == 0
+
+    top_products_response = client.get("/analytics/seller/top-products?limit=5")
+    assert top_products_response.status_code == 200
+    top_products = top_products_response.json()
+    assert len(top_products) >= 1
+    assert top_products[0]["ProductID"] == product["ProductID"]
+    assert top_products[0]["SoldUnits"] == 4
+    assert top_products[0]["SalesAmount"] == 4000.0
+
+
+def test_seller_analytics_forbidden_for_non_seller(client):
+    response = client.get("/analytics/seller/summary")
+    assert response.status_code == 403
 
