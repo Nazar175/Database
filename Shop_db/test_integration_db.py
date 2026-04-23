@@ -29,11 +29,23 @@ database.SessionLocal = TestingSessionLocal
 
 from main import app
 
-Base.metadata.create_all(bind=engine)
+FLOW_STATE: dict[str, object] = {}
 
 
-@pytest.fixture(scope="function")
+def _state_set(key: str, value: object) -> None:
+    FLOW_STATE[key] = value
+
+
+def _state_get(key: str) -> object:
+    assert key in FLOW_STATE, f"Missing state '{key}'. Run integration tests from test_01..."
+    return FLOW_STATE[key]
+
+
+@pytest.fixture(scope="module")
 def db_session():
+    Base.metadata.drop_all(bind=engine)
+    Base.metadata.create_all(bind=engine)
+
     session = TestingSessionLocal()
     try:
         yield session
@@ -41,376 +53,535 @@ def db_session():
         session.close()
 
 
-def _register_customer(
-    client,
-    username: str | None = None,
-    password: str = "002233Tt",
+@pytest.fixture(scope="module")
+def client(db_session):
+    def override_get_db():
+        yield db_session
+
+    app.dependency_overrides[get_db] = override_get_db
+
+    with TestClient(app) as c:
+        yield c
+
+    app.dependency_overrides.clear()
+
+
+def _register_user(
+    client: TestClient,
+    *,
     role: str = "user",
-    admin_key: str | None = None,
-):
+    password: str = "002233Tt",
+    username_prefix: str = "user",
+) -> dict[str, object]:
     suffix = random.randint(1, 1_000_000)
-    username = username or f"user_{suffix}"
+    username = f"{username_prefix}_{suffix}"
     email = f"{username}@example.com"
-    params = {
-        "username": username,
-        "email": email,
-        "password": password,
-        "phone": "1234567",
-        "country": "UA",
-        "role": role,
-    }
-    if admin_key is not None:
-        params["admin_key"] = admin_key
+
     response = client.post(
         "/register",
-        params=params,
+        params={
+            "username": username,
+            "email": email,
+            "password": password,
+            "phone": "1234567",
+            "country": "UA",
+            "role": role,
+        },
     )
-    assert response.status_code == 200
+    assert response.status_code == 200, response.text
+
+    payload = response.json()
     return {
-        "CustomerID": response.json()["customer_id"],
+        "CustomerID": payload["customer_id"],
+        "SupplierID": payload.get("supplier_id"),
         "Name": username,
         "Email": email,
         "Password": password,
     }
 
 
-def _login_customer(client, username: str, password: str) -> str:
+def _login_user(client: TestClient, username: str, password: str) -> str:
     response = client.post(
         "/login",
         data={"username": username, "password": password},
     )
-    assert response.status_code == 200
+    assert response.status_code == 200, response.text
     return response.json()["access_token"]
 
 
-@pytest.fixture(scope="function")
-def client(db_session):
-    def override_get_db():
-        try:
-            yield db_session
-        finally:
-            db_session.close()
-
-    app.dependency_overrides[get_db] = override_get_db
-
-    with TestClient(app) as c:
-        auth_customer = _register_customer(
-            c,
-            username=f"auth_{random.randint(1, 1_000_000)}",
-            role="admin",
-            admin_key="1461",
-        )
-        access_token = _login_customer(c, auth_customer["Name"], auth_customer["Password"])
-        c.headers.update({"Authorization": f"Bearer {access_token}"})
-        yield c
-
-    app.dependency_overrides.clear()
+def _auth_headers(token: str) -> dict[str, str]:
+    return {"Authorization": f"Bearer {token}"}
 
 
-STATE: dict[str, object] = {}
+def test_01_seller_register_account(client):
+    seller = _register_user(client, role="seller", username_prefix="seller_stage")
+    assert seller["SupplierID"] is not None
+    _state_set("seller", seller)
 
 
-def _require_state(key: str):
-    assert key in STATE, f"Missing {key}. Run previous tests in order."
-    return STATE[key]
+def test_02_seller_login(client):
+    seller = _state_get("seller")
+    token = _login_user(client, seller["Name"], seller["Password"])
+    _state_set("seller_headers", _auth_headers(token))
 
 
-def test_create_supplier(client):
-    supplier = client.post(
+def test_03_seller_profile_read_and_update(client):
+    seller = _state_get("seller")
+    seller_headers = _state_get("seller_headers")
+
+    read_profile = client.get(f"/customer/{seller['CustomerID']}", headers=seller_headers)
+    assert read_profile.status_code == 200
+    assert read_profile.json()["CustomerID"] == seller["CustomerID"]
+
+    update_profile = client.put(
+        f"/customer/{seller['CustomerID']}",
+        json={"Phone": "5551234", "Country": "PL"},
+        headers=seller_headers,
+    )
+    assert update_profile.status_code == 200
+    assert update_profile.json()["Country"] == "PL"
+
+
+def test_04_seller_supplier_manipulations(client):
+    seller = _state_get("seller")
+    seller_headers = _state_get("seller_headers")
+    supplier_id = seller["SupplierID"]
+
+    suppliers = client.get("/supplier", headers=seller_headers)
+    assert suppliers.status_code == 200
+    supplier_payload = suppliers.json()
+    assert len(supplier_payload) == 1
+    assert supplier_payload[0]["SupplierID"] == supplier_id
+
+    update_supplier = client.put(
+        f"/supplier/{supplier_id}",
+        json={
+            "SupplierName": "Seller Stage Supplier",
+            "Address": "Warsaw, PL",
+            "Phone": "9998887",
+        },
+        headers=seller_headers,
+    )
+    assert update_supplier.status_code == 200
+    assert update_supplier.json()["SupplierName"] == "Seller Stage Supplier"
+
+    create_supplier_forbidden = client.post(
         "/supplier",
         json={
-            "SupplierName": "SupplierFlow",
+            "SupplierName": "Should Not Be Created",
             "Address": "Kyiv, UA",
             "Phone": "1234567",
         },
-    ).json()
-    assert supplier["SupplierID"] > 0
-    STATE["supplier_id"] = supplier["SupplierID"]
+        headers=seller_headers,
+    )
+    assert create_supplier_forbidden.status_code == 403
 
 
-def test_create_products_for_supplier(client):
-    supplier_id = _require_state("supplier_id")
-    product_1 = client.post(
+def test_05_seller_create_products(client):
+    seller = _state_get("seller")
+    seller_headers = _state_get("seller_headers")
+    supplier_id = seller["SupplierID"]
+
+    main_product_response = client.post(
         "/product",
         json={
-            "ProductName": "Laptop Flow",
-            "Price": 1200,
+            "ProductName": "iPhone Stage",
+            "Price": 1000,
+            "AvailableQuantity": 10,
             "SupplierID": supplier_id,
         },
-    ).json()
-    product_2 = client.post(
+        headers=seller_headers,
+    )
+    assert main_product_response.status_code == 200
+    main_product = main_product_response.json()
+
+    extra_product_response = client.post(
         "/product",
         json={
-            "ProductName": "Mouse Flow",
-            "Price": 25,
+            "ProductName": "Watch Stage",
+            "Price": 200,
+            "AvailableQuantity": 6,
             "SupplierID": supplier_id,
         },
-    ).json()
-    STATE["product_ids"] = [product_1["ProductID"], product_2["ProductID"]]
+        headers=seller_headers,
+    )
+    assert extra_product_response.status_code == 200
+    extra_product = extra_product_response.json()
 
+    seller_products = client.get("/product", headers=seller_headers)
+    assert seller_products.status_code == 200
+    seller_product_ids = {item["ProductID"] for item in seller_products.json()}
+    assert main_product["ProductID"] in seller_product_ids
+    assert extra_product["ProductID"] in seller_product_ids
 
-def test_read_supplier_list(client):
-    supplier_id = _require_state("supplier_id")
-    suppliers = client.get("/supplier")
-    assert suppliers.status_code == 200
-    suppliers_json = suppliers.json()
-    assert any(s["SupplierID"] == supplier_id for s in suppliers_json)
-
-
-def test_read_supplier_products(client):
-    supplier_id = _require_state("supplier_id")
-    product_ids = set(_require_state("product_ids"))
-    supplier_products = client.get(f"/supplier/{supplier_id}/products")
+    supplier_products = client.get(f"/supplier/{supplier_id}/products", headers=seller_headers)
     assert supplier_products.status_code == 200
-    products_json = supplier_products.json()
-    found_ids = {p["ProductID"] for p in products_json}
-    assert product_ids.issubset(found_ids)
+    supplier_product_ids = {item["ProductID"] for item in supplier_products.json()}
+    assert main_product["ProductID"] in supplier_product_ids
+    assert extra_product["ProductID"] in supplier_product_ids
+
+    _state_set("main_product", main_product)
+    _state_set("extra_product", extra_product)
 
 
-def test_register_and_login_customer(client):
-    customer = _register_customer(client, username=f"CustomerFlow_{random.randint(1, 1_000_000)}")
-    token = _login_customer(client, customer["Name"], customer["Password"])
-    assert token
-    STATE["customer_id"] = customer["CustomerID"]
+def test_06_seller_update_and_delete_extra_product(client):
+    seller = _state_get("seller")
+    seller_headers = _state_get("seller_headers")
+    supplier_id = seller["SupplierID"]
+    main_product = _state_get("main_product")
+    extra_product = _state_get("extra_product")
+
+    update_product = client.put(
+        f"/product/{extra_product['ProductID']}",
+        json={
+            "ProductName": "Watch Stage Updated",
+            "Price": 250,
+            "AvailableQuantity": 8,
+            "SupplierID": supplier_id,
+        },
+        headers=seller_headers,
+    )
+    assert update_product.status_code == 200
+    assert update_product.json()["Price"] == 250
+
+    delete_product = client.delete(f"/product/{extra_product['ProductID']}", headers=seller_headers)
+    assert delete_product.status_code == 200
+
+    main_product_read = client.get(f"/product/{main_product['ProductID']}", headers=seller_headers)
+    assert main_product_read.status_code == 200
+    main_product_payload = main_product_read.json()
+    assert main_product_payload["AvailableQuantity"] == 10
+    assert "ApproxPriceUSD" in main_product_payload
+    assert "ApproxPriceEUR" in main_product_payload
 
 
-def test_create_order(client):
-    customer_id = _require_state("customer_id")
-    order = client.post(
+def test_07_customer_register_account(client):
+    customer = _register_user(client, role="user", username_prefix="customer_stage")
+    _state_set("customer", customer)
+
+
+def test_08_customer_login(client):
+    customer = _state_get("customer")
+    token = _login_user(client, customer["Name"], customer["Password"])
+    _state_set("customer_headers", _auth_headers(token))
+
+
+def test_09_customer_profile_and_product_permissions(client):
+    customer = _state_get("customer")
+    customer_headers = _state_get("customer_headers")
+    seller = _state_get("seller")
+    main_product = _state_get("main_product")
+
+    read_profile = client.get(f"/customer/{customer['CustomerID']}", headers=customer_headers)
+    assert read_profile.status_code == 200
+
+    update_profile = client.put(
+        f"/customer/{customer['CustomerID']}",
+        json={"Phone": "7776665", "Country": "DE"},
+        headers=customer_headers,
+    )
+    assert update_profile.status_code == 200
+    assert update_profile.json()["Country"] == "DE"
+
+    products = client.get("/product", headers=customer_headers)
+    assert products.status_code == 200
+    assert any(item["ProductID"] == main_product["ProductID"] for item in products.json())
+
+    read_main_product = client.get(f"/product/{main_product['ProductID']}", headers=customer_headers)
+    assert read_main_product.status_code == 200
+
+    create_product_forbidden = client.post(
+        "/product",
+        json={
+            "ProductName": "Customer Forbidden Product",
+            "Price": 10,
+            "AvailableQuantity": 2,
+            "SupplierID": seller["SupplierID"],
+        },
+        headers=customer_headers,
+    )
+    assert create_product_forbidden.status_code == 403
+
+    update_supplier_forbidden = client.put(
+        f"/supplier/{seller['SupplierID']}",
+        json={"SupplierName": "Customer Forbidden Supplier", "Address": "Berlin, DE", "Phone": "5554443"},
+        headers=customer_headers,
+    )
+    assert update_supplier_forbidden.status_code == 403
+
+
+def test_10_customer_create_first_order_and_detail(client):
+    customer = _state_get("customer")
+    customer_headers = _state_get("customer_headers")
+    seller_headers = _state_get("seller_headers")
+    main_product = _state_get("main_product")
+
+    order_response = client.post(
         "/order",
-        json={
-            "OrderDate": datetime.now().isoformat(),
-            "Status": "Pending",
-            "CustomerID": customer_id,
-        },
-    ).json()
-    assert order["CustomerID"] == customer_id
-    STATE["order_id"] = order["OrderID"]
+        json={"OrderDate": datetime.now().isoformat(), "Status": "Pending"},
+        headers=customer_headers,
+    )
+    assert order_response.status_code == 200
+    order = order_response.json()
+    assert order["CustomerID"] == customer["CustomerID"]
+    _state_set("order_1", order)
 
-
-def test_add_products_to_order(client):
-    order_id = _require_state("order_id")
-    product_ids = _require_state("product_ids")
-    detail_1 = client.post(
+    create_detail = client.post(
         "/orderdetail",
         json={
-            "OrderID": order_id,
-            "ProductID": product_ids[0],
-            "Quantity": 1,
+            "OrderID": order["OrderID"],
+            "ProductID": main_product["ProductID"],
+            "Quantity": 3,
             "ShippingAddress": "Main street 1",
         },
-    ).json()
-    detail_2 = client.post(
-        "/orderdetail",
-        json={
-            "OrderID": order_id,
-            "ProductID": product_ids[1],
-            "Quantity": 2,
-            "ShippingAddress": "Main street 1",
-        },
-    ).json()
-    assert detail_1["OrderID"] == order_id
-    assert detail_2["OrderID"] == order_id
+        headers=customer_headers,
+    )
+    assert create_detail.status_code == 200
+    detail = create_detail.json()
+    _state_set("detail_1", detail)
+
+    product_after_detail = client.get(f"/product/{main_product['ProductID']}", headers=seller_headers)
+    assert product_after_detail.status_code == 200
+    assert product_after_detail.json()["AvailableQuantity"] == 7
 
 
-def test_add_courier_to_order(client):
-    order_id = _require_state("order_id")
-    courier = client.post(
+def test_11_customer_update_order_detail(client):
+    customer_headers = _state_get("customer_headers")
+    seller_headers = _state_get("seller_headers")
+    main_product = _state_get("main_product")
+    detail = _state_get("detail_1")
+
+    update_detail = client.put(
+        f"/orderdetail/{detail['OrderDetailID']}",
+        json={"Quantity": 4, "ShippingAddress": "Main street 2"},
+        headers=customer_headers,
+    )
+    assert update_detail.status_code == 200
+    assert update_detail.json()["Quantity"] == 4
+
+    product_after_update = client.get(f"/product/{main_product['ProductID']}", headers=seller_headers)
+    assert product_after_update.status_code == 200
+    assert product_after_update.json()["AvailableQuantity"] == 6
+
+
+def test_12_customer_courier_flow(client):
+    customer = _state_get("customer")
+    customer_headers = _state_get("customer_headers")
+    order = _state_get("order_1")
+
+    create_courier = client.post(
         "/courier",
         json={
             "Name": "Fast Courier",
             "Country": "UA",
             "Price": 50,
-            "OrderID": order_id,
+            "OrderID": order["OrderID"],
         },
-    ).json()
-    assert courier["OrderID"] == order_id
+        headers=customer_headers,
+    )
+    assert create_courier.status_code == 200
+    courier = create_courier.json()
+    _state_set("courier", courier)
+
+    read_courier = client.get(f"/courier/{courier['CourierID']}", headers=customer_headers)
+    assert read_courier.status_code == 200
+
+    update_courier = client.put(
+        f"/courier/{courier['CourierID']}",
+        json={"Price": 55},
+        headers=customer_headers,
+    )
+    assert update_courier.status_code == 200
+    assert float(update_courier.json()["Price"]) == 55.0
+
+    read_courier_hier = client.get(
+        f"/customer/{customer['CustomerID']}/orders/{order['OrderID']}/courier",
+        headers=customer_headers,
+    )
+    assert read_courier_hier.status_code == 200
+    assert read_courier_hier.json()["CourierID"] == courier["CourierID"]
 
 
-def test_create_payment(client):
-    order_id = _require_state("order_id")
-    payment = client.post(
+def test_13_customer_payment_flow(client):
+    customer = _state_get("customer")
+    customer_headers = _state_get("customer_headers")
+    order = _state_get("order_1")
+
+    create_payment = client.post(
         "/payment",
         json={
-            "OrderID": order_id,
+            "OrderID": order["OrderID"],
             "Status": "Pending",
-            "Amount": 1250,
+            "Amount": 4000,
             "PaymentDate": datetime.now().isoformat(),
         },
-    ).json()
-    assert payment["OrderID"] == order_id
-    STATE["payment_id"] = payment["PaymentID"]
+        headers=customer_headers,
+    )
+    assert create_payment.status_code == 200
+    payment = create_payment.json()
+    _state_set("payment", payment)
+
+    read_payment = client.get(f"/payment/{payment['PaymentID']}", headers=customer_headers)
+    assert read_payment.status_code == 200
+
+    update_payment = client.put(
+        f"/payment/{payment['PaymentID']}",
+        json={"Status": "Paid", "Amount": 4000},
+        headers=customer_headers,
+    )
+    assert update_payment.status_code == 200
+    assert update_payment.json()["Status"] == "Paid"
+
+    read_payment_hier = client.get(
+        f"/customer/{customer['CustomerID']}/orders/{order['OrderID']}/payment",
+        headers=customer_headers,
+    )
+    assert read_payment_hier.status_code == 200
+    assert read_payment_hier.json()["PaymentID"] == payment["PaymentID"]
 
 
-def test_add_gift_to_payment(client):
-    payment_id = _require_state("payment_id")
-    gift = client.post(
+def test_14_customer_gift_flow(client):
+    customer = _state_get("customer")
+    customer_headers = _state_get("customer_headers")
+    order = _state_get("order_1")
+    payment = _state_get("payment")
+
+    create_gift = client.post(
         "/gift",
-        json={
-            "Amount": 100,
-            "Unit": "USD",
-            "Type": "Certificate",
-            "PaymentID": payment_id,
-        },
-    ).json()
-    assert gift["PaymentID"] == payment_id
-
-
-def test_customer_can_read_products_but_cannot_modify_supplier_or_product(client):
-    seller = _register_customer(
-        client,
-        username=f"seller_{random.randint(1, 1_000_000)}",
-        role="seller",
+        json={"Amount": 50, "Unit": "USD", "Type": "Gift", "PaymentID": payment["PaymentID"]},
+        headers=customer_headers,
     )
-    seller_token = _login_customer(client, seller["Name"], seller["Password"])
-    seller_headers = {"Authorization": f"Bearer {seller_token}"}
+    assert create_gift.status_code == 200
+    gift = create_gift.json()
+    _state_set("gift", gift)
 
-    supplier_list_response = client.get("/supplier", headers=seller_headers)
-    assert supplier_list_response.status_code == 200
-    supplier_payload = supplier_list_response.json()
-    assert len(supplier_payload) >= 1
-    supplier_id = supplier_payload[0]["SupplierID"]
+    update_gift = client.put(
+        f"/gift/{gift['GiftID']}",
+        json={"Amount": 80},
+        headers=customer_headers,
+    )
+    assert update_gift.status_code == 200
+    assert float(update_gift.json()["Amount"]) == 80.0
 
-    product_response = client.post(
+    read_gift = client.get(f"/gift/{gift['GiftID']}", headers=customer_headers)
+    assert read_gift.status_code == 200
+
+    read_gifts_hier = client.get(
+        f"/customer/{customer['CustomerID']}/orders/{order['OrderID']}/payment/{payment['PaymentID']}/gifts",
+        headers=customer_headers,
+    )
+    assert read_gifts_hier.status_code == 200
+    assert any(item["GiftID"] == gift["GiftID"] for item in read_gifts_hier.json())
+
+
+def test_15_customer_complete_first_order_and_create_second_order(client):
+    customer_headers = _state_get("customer_headers")
+    seller_headers = _state_get("seller_headers")
+    main_product = _state_get("main_product")
+    order_1 = _state_get("order_1")
+
+    complete_order = client.put(
+        f"/order/{order_1['OrderID']}",
+        json={"Status": "Completed"},
+        headers=customer_headers,
+    )
+    assert complete_order.status_code == 200
+    assert complete_order.json()["Status"] == "Completed"
+
+    order_2_response = client.post(
+        "/order",
+        json={"OrderDate": datetime.now().isoformat(), "Status": "Pending"},
+        headers=customer_headers,
+    )
+    assert order_2_response.status_code == 200
+    order_2 = order_2_response.json()
+    _state_set("order_2", order_2)
+
+    create_second_detail = client.post(
+        "/orderdetail",
+        json={
+            "OrderID": order_2["OrderID"],
+            "ProductID": main_product["ProductID"],
+            "Quantity": 1,
+            "ShippingAddress": "Main street 3",
+        },
+        headers=customer_headers,
+    )
+    assert create_second_detail.status_code == 200
+
+    product_after_second_order = client.get(f"/product/{main_product['ProductID']}", headers=seller_headers)
+    assert product_after_second_order.status_code == 200
+    assert product_after_second_order.json()["AvailableQuantity"] == 5
+
+
+def test_16_seller_statistics_are_correct(client):
+    seller = _state_get("seller")
+    seller_headers = _state_get("seller_headers")
+    main_product = _state_get("main_product")
+
+    summary_response = client.get("/analytics/seller/summary", headers=seller_headers)
+    assert summary_response.status_code == 200
+    summary = summary_response.json()
+    assert summary["SellerCustomerID"] == seller["CustomerID"]
+    assert summary["OwnedProductsCount"] == 1
+    assert summary["SoldUnits"] == 5
+    assert summary["SalesAmount"] == 5000.0
+    assert summary["OrdersWithSales"] == 2
+    assert summary["CompletedOrders"] == 1
+    assert summary["PendingOrders"] == 1
+    assert summary["ShippedOrders"] == 0
+    assert summary["CancelledOrders"] == 0
+
+    top_products_response = client.get("/analytics/seller/top-products?limit=3", headers=seller_headers)
+    assert top_products_response.status_code == 200
+    top_products = top_products_response.json()
+    assert len(top_products) >= 1
+    assert top_products[0]["ProductID"] == main_product["ProductID"]
+    assert top_products[0]["SoldUnits"] == 5
+    assert top_products[0]["SalesAmount"] == 5000.0
+
+
+def test_17_customer_cannot_access_seller_statistics(client):
+    customer_headers = _state_get("customer_headers")
+    response = client.get("/analytics/seller/summary", headers=customer_headers)
+    assert response.status_code == 403
+
+
+def test_18_seller_statistics_are_isolated_from_other_sellers(client):
+    seller_headers = _state_get("seller_headers")
+
+    second_seller = _register_user(client, role="seller", username_prefix="seller_second_stage")
+    second_token = _login_user(client, second_seller["Name"], second_seller["Password"])
+    second_headers = _auth_headers(second_token)
+
+    second_product = client.post(
         "/product",
         json={
-            "ProductName": "Seller Product",
-            "Price": 99,
-            "SupplierID": supplier_id,
+            "ProductName": "Second Seller Product",
+            "Price": 700,
+            "AvailableQuantity": 5,
+            "SupplierID": second_seller["SupplierID"],
         },
-        headers=seller_headers,
+        headers=second_headers,
     )
-    assert product_response.status_code == 200
-    product_id = product_response.json()["ProductID"]
+    assert second_product.status_code == 200
+    second_product_id = second_product.json()["ProductID"]
 
-    buyer = _register_customer(client, username=f"buyer_{random.randint(1, 1_000_000)}")
-    buyer_token = _login_customer(client, buyer["Name"], buyer["Password"])
-    buyer_headers = {"Authorization": f"Bearer {buyer_token}"}
+    second_summary_response = client.get("/analytics/seller/summary", headers=second_headers)
+    assert second_summary_response.status_code == 200
+    second_summary = second_summary_response.json()
+    assert second_summary["SellerCustomerID"] == second_seller["CustomerID"]
+    assert second_summary["SoldUnits"] == 0
+    assert second_summary["SalesAmount"] == 0.0
+    assert second_summary["OrdersWithSales"] == 0
+    assert second_summary["CompletedOrders"] == 0
+    assert second_summary["PendingOrders"] == 0
 
-    products_list = client.get("/product", headers=buyer_headers)
-    assert products_list.status_code == 200
-    assert any(p["ProductID"] == product_id for p in products_list.json())
+    first_summary_response = client.get("/analytics/seller/summary", headers=seller_headers)
+    assert first_summary_response.status_code == 200
+    first_summary = first_summary_response.json()
+    assert first_summary["SoldUnits"] == 5
+    assert first_summary["SalesAmount"] == 5000.0
 
-    single_product = client.get(f"/product/{product_id}", headers=buyer_headers)
-    assert single_product.status_code == 200
-    assert single_product.json()["ProductID"] == product_id
-
-    create_product_forbidden = client.post(
-        "/product",
-        json={
-            "ProductName": "Buyer Product",
-            "Price": 10,
-            "SupplierID": supplier_id,
-        },
-        headers=buyer_headers,
-    )
-    assert create_product_forbidden.status_code == 403
-
-    update_product_forbidden = client.put(
-        f"/product/{product_id}",
-        json={
-            "ProductName": "Buyer Updated Product",
-            "Price": 101,
-            "SupplierID": supplier_id,
-        },
-        headers=buyer_headers,
-    )
-    assert update_product_forbidden.status_code == 403
-
-    update_supplier_forbidden = client.put(
-        f"/supplier/{supplier_id}",
-        json={
-            "SupplierName": "Buyer Updated Supplier",
-            "Address": "Lviv, UA",
-            "Phone": "1234567",
-        },
-        headers=buyer_headers,
-    )
-    assert update_supplier_forbidden.status_code == 403
-
-
-def test_supplier_is_auto_created_for_seller_and_user_cannot_create_supplier(client):
-    user = _register_customer(client, username=f"user_no_supplier_{random.randint(1, 1_000_000)}")
-    user_token = _login_customer(client, user["Name"], user["Password"])
-    user_headers = {"Authorization": f"Bearer {user_token}"}
-
-    create_supplier_forbidden = client.post(
-        "/supplier",
-        json={
-            "SupplierName": "NotAllowedSupplier",
-            "Address": "Kyiv, UA",
-            "Phone": "1234567",
-        },
-        headers=user_headers,
-    )
-    assert create_supplier_forbidden.status_code == 403
-
-    seller = _register_customer(
-        client,
-        username=f"seller_auto_{random.randint(1, 1_000_000)}",
-        role="seller",
-    )
-    assert "CustomerID" in seller
-    seller_token = _login_customer(client, seller["Name"], seller["Password"])
-    seller_headers = {"Authorization": f"Bearer {seller_token}"}
-
-    seller_suppliers = client.get("/supplier", headers=seller_headers)
-    assert seller_suppliers.status_code == 200
-    suppliers_payload = seller_suppliers.json()
-    assert len(suppliers_payload) >= 1
-
-
-def test_seller_can_view_only_own_products_in_get_endpoints(client):
-    seller_one = _register_customer(
-        client,
-        username=f"seller_one_{random.randint(1, 1_000_000)}",
-        role="seller",
-    )
-    seller_one_token = _login_customer(client, seller_one["Name"], seller_one["Password"])
-    seller_one_headers = {"Authorization": f"Bearer {seller_one_token}"}
-
-    seller_one_supplier = client.get("/supplier", headers=seller_one_headers).json()[0]
-    seller_one_product_response = client.post(
-        "/product",
-        json={
-            "ProductName": "Seller One Product",
-            "Price": 50,
-            "SupplierID": seller_one_supplier["SupplierID"],
-        },
-        headers=seller_one_headers,
-    )
-    assert seller_one_product_response.status_code == 200
-    seller_one_product_id = seller_one_product_response.json()["ProductID"]
-
-    seller_two = _register_customer(
-        client,
-        username=f"seller_two_{random.randint(1, 1_000_000)}",
-        role="seller",
-    )
-    seller_two_token = _login_customer(client, seller_two["Name"], seller_two["Password"])
-    seller_two_headers = {"Authorization": f"Bearer {seller_two_token}"}
-
-    seller_two_supplier = client.get("/supplier", headers=seller_two_headers).json()[0]
-    seller_two_product_response = client.post(
-        "/product",
-        json={
-            "ProductName": "Seller Two Product",
-            "Price": 75,
-            "SupplierID": seller_two_supplier["SupplierID"],
-        },
-        headers=seller_two_headers,
-    )
-    assert seller_two_product_response.status_code == 200
-    seller_two_product_id = seller_two_product_response.json()["ProductID"]
-
-    seller_one_products = client.get("/product", headers=seller_one_headers)
-    assert seller_one_products.status_code == 200
-    seller_one_product_ids = {product["ProductID"] for product in seller_one_products.json()}
-    assert seller_one_product_id in seller_one_product_ids
-    assert seller_two_product_id not in seller_one_product_ids
-
-    seller_one_own_product = client.get(f"/product/{seller_one_product_id}", headers=seller_one_headers)
-    assert seller_one_own_product.status_code == 200
-
-    seller_one_foreign_product = client.get(f"/product/{seller_two_product_id}", headers=seller_one_headers)
-    assert seller_one_foreign_product.status_code == 404
+    first_seller_cannot_open_second_product = client.get(f"/product/{second_product_id}", headers=seller_headers)
+    assert first_seller_cannot_open_second_product.status_code == 404

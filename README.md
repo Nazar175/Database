@@ -2,13 +2,16 @@
 
 ## Тут буде уся інформація стосовно створення бази даних
 
-### Для запуску програми: cd Shop_db
+## Для запуску програми:
+### cd Shop_db
 ### Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned
-### venv/Scripts/activate і deactivate
+### venv/Scripts/activate або deactivate
 ### uvicorn main:app --reload
 ### http://127.0.0.1:8000/docs#/
-### Для запуску тестів: cd Shop_db
+
+## Для запуску тестів:
+### cd Shop_db
 ### py -m pytest -v test_api.py
 ### py -m pytest -v test_integration_db.py
 
-Зробити статистику, платіжка, технічний дизайн, оновити тести
+Зробити платіжка, технічний дизайн
