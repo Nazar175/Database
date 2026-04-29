@@ -44,11 +44,27 @@ def client(db_session):
             db_session.close()
 
     from models import Customer
+    admin_user = db_session.query(Customer).filter(Customer.Email == "test-admin@example.com").first()
+    if admin_user is None:
+        admin_user = Customer(
+            Name="testadmin",
+            Email="test-admin@example.com",
+            Role="admin",
+            password_hash="fakehash",
+        )
+        db_session.add(admin_user)
+        db_session.commit()
+        db_session.refresh(admin_user)
+    admin_user_id = admin_user.CustomerID
+
     def override_get_current_user():
+        current_admin = db_session.query(Customer).filter(Customer.CustomerID == admin_user_id).first()
+        if current_admin is not None:
+            return current_admin
         return Customer(
-            CustomerID=1,
-            Name="testuser",
-            Email="test@example.com",
+            CustomerID=admin_user_id,
+            Name="testadmin",
+            Email="test-admin@example.com",
             Role="admin",
             password_hash="fakehash",
         )
@@ -295,7 +311,10 @@ def test_delete_payment(client):
 def test_create_orderdetail(client):
     cust = _register_customer(client, name="CustomerOD", email=f"{random.randint(1,1000)}@example.com")
     s = client.post("/supplier", json={"SupplierName":"SupplierOD"}).json()
-    prod = client.post("/product", json={"ProductName":"ProductOD","Price":10,"SupplierID":s["SupplierID"]}).json()
+    prod = client.post(
+        "/product",
+        json={"ProductName":"ProductOD","Price":10,"SupplierID":s["SupplierID"],"AvailableQuantity":10},
+    ).json()
     o = client.post("/order", json={"OrderDate": datetime.now().isoformat(),"Status":"Pending","CustomerID":cust["CustomerID"]}).json()
     od = client.post("/orderdetail", json={"OrderID":o["OrderID"],"ProductID":prod["ProductID"],"Quantity":2,"ShippingAddress":"AddressOD"}).json()
     assert od["Quantity"] == 2
@@ -304,7 +323,10 @@ def test_create_orderdetail(client):
 def test_read_orderdetail(client):
     cust = _register_customer(client, name="CustomerODRead", email=f"{random.randint(1,1000)}@example.com")
     s = client.post("/supplier", json={"SupplierName":"SupplierODRead"}).json()
-    prod = client.post("/product", json={"ProductName":"ProductODRead","Price":10,"SupplierID":s["SupplierID"]}).json()
+    prod = client.post(
+        "/product",
+        json={"ProductName":"ProductODRead","Price":10,"SupplierID":s["SupplierID"],"AvailableQuantity":10},
+    ).json()
     o = client.post("/order", json={"OrderDate": datetime.now().isoformat(),"Status":"Pending","CustomerID":cust["CustomerID"]}).json()
     od = client.post("/orderdetail", json={"OrderID":o["OrderID"],"ProductID":prod["ProductID"],"Quantity":2,"ShippingAddress":"AddressODRead"}).json()
     r = client.get(f"/orderdetail/{od['OrderDetailID']}")
@@ -313,7 +335,10 @@ def test_read_orderdetail(client):
 def test_update_orderdetail(client):
     cust = _register_customer(client, name="CustomerODUpdate", email=f"{random.randint(1,1000)}@example.com")
     s = client.post("/supplier", json={"SupplierName":"SupplierODUpdate"}).json()
-    prod = client.post("/product", json={"ProductName":"ProductODUpdate","Price":10,"SupplierID":s["SupplierID"]}).json()
+    prod = client.post(
+        "/product",
+        json={"ProductName":"ProductODUpdate","Price":10,"SupplierID":s["SupplierID"],"AvailableQuantity":10},
+    ).json()
     o = client.post("/order", json={"OrderDate": datetime.now().isoformat(),"Status":"Pending","CustomerID":cust["CustomerID"]}).json()
     od = client.post("/orderdetail", json={"OrderID":o["OrderID"],"ProductID":prod["ProductID"],"Quantity":2,"ShippingAddress":"AddressODUpdate"}).json()
     r = client.put(f"/orderdetail/{od['OrderDetailID']}", json={"Quantity":5,"ShippingAddress":"UpdatedODAddress"}).json()
@@ -323,7 +348,10 @@ def test_update_orderdetail(client):
 def test_delete_orderdetail(client):
     cust = _register_customer(client, name="CustomerODDel", email=f"{random.randint(1,1000)}@example.com")
     s = client.post("/supplier", json={"SupplierName":"SupplierODDel"}).json()
-    prod = client.post("/product", json={"ProductName":"ProductODDel","Price":10,"SupplierID":s["SupplierID"]}).json()
+    prod = client.post(
+        "/product",
+        json={"ProductName":"ProductODDel","Price":10,"SupplierID":s["SupplierID"],"AvailableQuantity":10},
+    ).json()
     o = client.post("/order", json={"OrderDate": datetime.now().isoformat(),"Status":"Pending","CustomerID":cust["CustomerID"]}).json()
     od = client.post("/orderdetail", json={"OrderID":o["OrderID"],"ProductID":prod["ProductID"],"Quantity":2,"ShippingAddress":"AddressODDel"}).json()
     r = client.delete(f"/orderdetail/{od['OrderDetailID']}")
@@ -391,10 +419,30 @@ def test_create_random_order_analytics(client):
 
 
 def test_order_summary_analytics(client):
-    for i in range(3):
-        email = f"user{i}_{random.randint(1,1000)}@example.com"
-        cust = _register_customer(client, name=f"Customer{i}", email=email, phone=f"12345{i}")
-        client.post(f"/analytics/create-random-order/{cust['CustomerID']}").json()
+    supplier = client.post("/supplier", json={"SupplierName": "AnalyticsSummarySupplier"}).json()
+    seeded_product = client.post(
+        "/product",
+        json={
+            "ProductName": "AnalyticsSummaryProduct",
+            "Price": 100,
+            "SupplierID": supplier["SupplierID"],
+            "AvailableQuantity": 50,
+        },
+    )
+    assert seeded_product.status_code == 200
+
+    created_with_detail = 0
+    attempts = 0
+    while created_with_detail < 3 and attempts < 10:
+        email = f"user{attempts}_{random.randint(1,1000)}@example.com"
+        cust = _register_customer(client, name=f"Customer{attempts}", email=email, phone=f"12345{attempts}")
+        create_random_order = client.post(f"/analytics/create-random-order/{cust['CustomerID']}")
+        assert create_random_order.status_code == 200
+        if create_random_order.json()["order"]["ShippingAddress"] is not None:
+            created_with_detail += 1
+        attempts += 1
+
+    assert created_with_detail >= 3
 
     r = client.get("/analytics/orders-summary")
     assert r.status_code == 200

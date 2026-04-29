@@ -242,7 +242,7 @@ def test_06_seller_update_and_delete_extra_product(client):
         headers=seller_headers,
     )
     assert update_product.status_code == 200
-    assert update_product.json()["Price"] == 250
+    assert float(update_product.json()["Price"]) == 250.0
 
     delete_product = client.delete(f"/product/{extra_product['ProductID']}", headers=seller_headers)
     assert delete_product.status_code == 200

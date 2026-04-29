@@ -14,4 +14,4 @@
 ### py -m pytest -v test_api.py
 ### py -m pytest -v test_integration_db.py
 
-Зробити платіжка, технічний дизайн
+Зробити платіжку, технічний дизайн
