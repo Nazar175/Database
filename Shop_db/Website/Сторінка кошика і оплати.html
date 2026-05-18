@@ -1,0 +1,208 @@
+﻿<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TekLink - Сторінка кошика і оплати</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+    <link rel="icon" href="picture/Логотип компанії.png" type="image/png">
+</head>
+<body>
+<div class="page-wrap">
+    <header class="site-header">
+        <div class="container topbar">
+            <a class="brand" href="main.html" aria-label="TekLink - головна сторінка">
+                <img class="brand__logo" src="picture/Логотип компанії.png" alt="Логотип TekLink">
+                <h1 class="brand__name">Tek<span class="brand__name-accent">Link</span></h1>
+            </a>
+
+            <a class="catalog-btn" href="Сторінка акцій.html" aria-label="Каталог та акційні пропозиції">
+                <i class="fa-solid fa-border-all" aria-hidden="true"></i>
+                <span>Каталог</span>
+            </a>
+
+            <form class="search-wrap" action="#" method="get">
+                <div class="search-input-wrap">
+                    <img src="picture/Лупа.png" alt="Пошук">
+                    <input type="search" name="search" placeholder="Я шукаю..." aria-label="Пошук товару">
+                </div>
+                <button class="search-btn" type="submit">Знайти</button>
+            </form>
+
+            <nav class="top-icons" aria-label="Швидка навігація">
+                <a href="#" class="js-register-trigger" aria-label="Реєстрація">
+                    <img src="picture/Фігурка користувача.png" alt="Користувач">
+                </a>
+                <a href="Сторінка кошика і оплати.html" aria-label="Кошик">
+                    <img src="picture/Білий кошик.png" alt="Кошик">
+                </a>
+            </nav>
+            <button class="burger-toggle" type="button" aria-label="Відкрити мобільне меню" aria-controls="mobile-menu" aria-expanded="false">
+                <img src="picture/Бургер-меню.png" alt="Меню">
+            </button>
+
+            <nav class="mobile-menu" id="mobile-menu" aria-label="Мобільне меню">
+                <a class="mobile-menu__item" href="Сторінка кошика і оплати.html" aria-label="Кошик">
+                    <img src="picture/Білий кошик.png" alt="Кошик">
+                    <span>Кошик</span>
+                </a>
+                <a class="mobile-menu__item" href="Сторінка акцій.html" aria-label="Каталог">
+                    <i class="fa-solid fa-border-all mobile-menu__icon" aria-hidden="true"></i>
+                    <span>Каталог</span>
+                </a>
+                <a class="mobile-menu__item js-register-trigger" href="#" aria-label="Авторизація">
+                    <img src="picture/Фігурка користувача.png" alt="Авторизація">
+                    <span>Авторизація</span>
+                </a>
+            </nav>
+        </div>
+    </header>
+
+    <main class="main-content">
+        <div class="container">
+            <section class="page-hero">
+                <h1>Кошик та оплата</h1>
+                <p>Перевірте склад замовлення, оберіть зручну доставку та спосіб оплати. Після підтвердження очікуйте на доставку у зазначеному вами місці.</p>
+            </section>
+
+            <!-- Основний блок кошика -->
+            <section class="cart-layout">
+                <div class="cart-items">
+                    <article class="cart-item">
+                        <img src="https://content2.rozetka.com.ua/goods/images/big_tile/633098035.jpg" alt="Ноутбук Acer Aspire 3 15.6">
+                        <div class="cart-item__info">
+                            <h2 class="cart-item__title">Ноутбук Acer Aspire 3 15.6"</h2>
+                            <p class="cart-item__meta">Код товару: TL-AC-173 | Гарантія: 24 міс.</p>
+                        </div>
+                        <div class="qty" aria-label="Кількість товару">
+                            <button type="button" aria-label="Зменшити">-</button>
+                            <span>1</span>
+                            <button type="button" aria-label="Збільшити">+</button>
+                        </div>
+                        <strong>17 999₴</strong>
+                    </article>
+
+                    <article class="cart-item">
+                        <img src="https://content2.rozetka.com.ua/goods/images/big_tile/653651261.jpg" alt="Смартфон Samsung Galaxy S24 Ultra">
+                        <div class="cart-item__info">
+                            <h2 class="cart-item__title">Смартфон Samsung Galaxy S24 Ultra</h2>
+                            <p class="cart-item__meta">Код товару: TL-SS-S24 | Гарантія: 12 міс.</p>
+                        </div>
+                        <div class="qty" aria-label="Кількість товару">
+                            <button type="button" aria-label="Зменшити">-</button>
+                            <span>1</span>
+                            <button type="button" aria-label="Збільшити">+</button>
+                        </div>
+                        <strong>45 999₴</strong>
+                    </article>
+
+                    <article class="cart-item">
+                        <img src="https://content2.rozetka.com.ua/goods/images/big_tile/614940179.jpg" alt="Бездротові навушники Smart 800">
+                        <div class="cart-item__info">
+                            <h2 class="cart-item__title">Бездротові навушники Smart 800</h2>
+                            <p class="cart-item__meta">Код товару: TL-AU-800 | Гарантія: 36 міс.</p>
+                        </div>
+                        <div class="qty" aria-label="Кількість товару">
+                            <button type="button" aria-label="Зменшити">-</button>
+                            <span>2</span>
+                            <button type="button" aria-label="Збільшити">+</button>
+                        </div>
+                        <strong>3 998₴</strong>
+                    </article>
+
+                    <section class="page-block" style="margin-top: 14px;">
+                        <h2>Дані для доставки</h2>
+                        <form class="form-grid" action="#" method="post">
+                            <input type="text" name="full_name" placeholder="ПІБ отримувача" required>
+                            <input type="tel" name="phone" placeholder="Телефон (+380...)" required>
+                            <input type="email" name="email" placeholder="Email">
+                            <select name="delivery_type" required>
+                                <option value="">Оберіть спосіб доставки</option>
+                                <option value="nova">Нова Пошта (відділення)</option>
+                                <option value="courier">Кур'єр по місту</option>
+                                <option value="pickup">Самовивіз із магазину</option>
+                            </select>
+                            <textarea name="comment" placeholder="Коментар до замовлення (за бажанням)"></textarea>
+
+                            <h3>Оплата</h3>
+                            <div class="radio-list">
+                                <label><input type="radio" name="payment" value="card" checked> Онлайн карткою</label>
+                                <label><input type="radio" name="payment" value="cod"> Післяплата при отриманні</label>
+                                <label><input type="radio" name="payment" value="parts"> Оплата частинами</label>
+                            </div>
+                        </form>
+                    </section>
+                </div>
+
+                <aside class="summary" aria-label="Підсумок замовлення">
+                    <h3>Ваше замовлення</h3>
+                    <div class="summary-line"><span>Товари (4 шт.)</span><span>67 996₴</span></div>
+                    <div class="summary-line"><span>Знижка</span><span>-1 500₴</span></div>
+                    <div class="summary-line"><span>Доставка</span><span>0₴</span></div>
+                    <div class="summary-line total"><span>До сплати</span><span>66 496₴</span></div>
+                    <button class="checkout-btn" type="button">Підтвердити замовлення</button>
+                    <p style="font-size: 16px; color: #666; margin-bottom: 0;">Натискаючи кнопку, ви погоджуєтесь з <a href="Умови використання сайту.html">умовами використання сайту</a>.</p>
+                </aside>
+            </section>
+        </div>
+    </main>
+
+    <footer class="site-footer">
+        <div class="container footer-grid">
+            <section class="footer-col">
+                <h2 class="footer-title">Ми в соціальних мережах</h2>
+                <div class="social-row">
+                    <a href="#" aria-label="TikTok"><i class="fa-brands fa-tiktok"></i></a>
+                    <a href="#" aria-label="Telegram"><i class="fa-brands fa-telegram"></i></a>
+                    <a href="#" aria-label="Facebook"><i class="fa-brands fa-facebook"></i></a>
+                    <a href="#" aria-label="YouTube"><i class="fa-brands fa-youtube"></i></a>
+                    <a href="#" aria-label="Instagram"><i class="fa-brands fa-instagram"></i></a>
+                    <a href="#" aria-label="X"><i class="fa-brands fa-x-twitter"></i></a>
+                    <a href="#" aria-label="Viber"><i class="fa-brands fa-viber"></i></a>
+                </div>
+            </section>
+
+            <section class="footer-col">
+                <h2 class="footer-title">Інформація про компанію</h2>
+                <nav class="footer-links" aria-label="Інформація про компанію">
+                    <a href="Про нас.html">Про нас</a>
+                    <a href="Умови використання сайту.html">Умови використання сайту</a>
+                    <span>Контакти</span>
+                    <a href="Сторінка акцій.html">Нові акції</a>
+                </nav>
+            </section>
+
+            <section class="footer-col">
+                <h2 class="footer-title">Допомога</h2>
+                <nav class="footer-links" aria-label="Допомога клієнтам">
+                    <a href="Сторінка кошика і оплати.html">Доставка та оплата</a>
+                    <a href="Сторінка кошика і оплати.html">Кредит</a>
+                    <a href="Умови використання сайту.html">Гарантія</a>
+                    <a href="Умови використання сайту.html">Повернення товару</a>
+                </nav>
+            </section>
+
+            <section class="footer-col">
+                <h2 class="footer-title">Сервіси</h2>
+                <nav class="footer-links" aria-label="Сервіси TekLink">
+                    <span>Бонусний рахунок</span>
+                    <a href="Сторінка акцій.html">Подарункові сертифікати</a>
+                    <span>Відстеження замовлення</span>
+                    <a href="main.html">Популярні товари</a>
+                </nav>
+            </section>
+        </div>
+    </footer>
+</div>
+    <script src="demo.js"></script>
+</body>
+</html>
+
+
+
+
+

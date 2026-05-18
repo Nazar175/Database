@@ -1,20 +1,26 @@
-from fastapi import FastAPI, Depends
+import logging
+from pathlib import Path
+
+from fastapi import Depends, FastAPI
+from fastapi.responses import RedirectResponse
+from fastapi.staticfiles import StaticFiles
 from sqlalchemy import inspect, text
+
 from database import Base, engine
 from routers import (
+    analytics,
+    courier,
     customer,
+    gift,
     order,
     orderdetail,
     payment,
-    gift,
-    courier,
     product,
     supplier,
-    analytics
 )
 from routers.customer import auth_router, get_current_user
 
-Base.metadata.create_all(bind=engine)
+logger = logging.getLogger(__name__)
 
 
 def _ensure_column(table_name: str, column_name: str, ddl: str) -> None:
@@ -76,49 +82,54 @@ def _migrate_shipping_address_to_order_detail() -> None:
             pass
 
 
-_ensure_column(
-    table_name="Customer",
-    column_name="password_hash",
-    ddl="ALTER TABLE Customer ADD COLUMN password_hash VARCHAR(128) NULL",
-)
-_ensure_column(
-    table_name="Customer",
-    column_name="Role",
-    ddl="ALTER TABLE Customer ADD COLUMN Role VARCHAR(20) NOT NULL DEFAULT 'user'",
-)
-_ensure_column(
-    table_name="Supplier",
-    column_name="OwnerCustomerID",
-    ddl="ALTER TABLE Supplier ADD COLUMN OwnerCustomerID INT NULL",
-)
-_ensure_column(
-    table_name="Supplier",
-    column_name="Role",
-    ddl="ALTER TABLE Supplier ADD COLUMN Role VARCHAR(20) NOT NULL DEFAULT 'seller'",
-)
-_ensure_column(
-    table_name="Product",
-    column_name="OwnerCustomerID",
-    ddl="ALTER TABLE Product ADD COLUMN OwnerCustomerID INT NULL",
-)
-_ensure_column(
-    table_name="Product",
-    column_name="AvailableQuantity",
-    ddl="ALTER TABLE Product ADD COLUMN AvailableQuantity INT NOT NULL DEFAULT 0",
-)
-_ensure_column(
-    table_name="OrderDetail",
-    column_name="ShippingAddress",
-    ddl="ALTER TABLE OrderDetail ADD COLUMN ShippingAddress VARCHAR(200) NULL",
-)
+def initialize_database_schema() -> None:
+    Base.metadata.create_all(bind=engine)
 
-_migrate_shipping_address_to_order_detail()
+    _ensure_column(
+        table_name="Customer",
+        column_name="password_hash",
+        ddl="ALTER TABLE Customer ADD COLUMN password_hash VARCHAR(128) NULL",
+    )
+    _ensure_column(
+        table_name="Customer",
+        column_name="Role",
+        ddl="ALTER TABLE Customer ADD COLUMN Role VARCHAR(20) NOT NULL DEFAULT 'user'",
+    )
+    _ensure_column(
+        table_name="Supplier",
+        column_name="OwnerCustomerID",
+        ddl="ALTER TABLE Supplier ADD COLUMN OwnerCustomerID INT NULL",
+    )
+    _ensure_column(
+        table_name="Supplier",
+        column_name="Role",
+        ddl="ALTER TABLE Supplier ADD COLUMN Role VARCHAR(20) NOT NULL DEFAULT 'seller'",
+    )
+    _ensure_column(
+        table_name="Product",
+        column_name="OwnerCustomerID",
+        ddl="ALTER TABLE Product ADD COLUMN OwnerCustomerID INT NULL",
+    )
+    _ensure_column(
+        table_name="Product",
+        column_name="AvailableQuantity",
+        ddl="ALTER TABLE Product ADD COLUMN AvailableQuantity INT NOT NULL DEFAULT 0",
+    )
+    _ensure_column(
+        table_name="OrderDetail",
+        column_name="ShippingAddress",
+        ddl="ALTER TABLE OrderDetail ADD COLUMN ShippingAddress VARCHAR(200) NULL",
+    )
+
+    _migrate_shipping_address_to_order_detail()
 
 app = FastAPI(
     title="Electron-Shop API",
     description="Магазин електроніки, API для керування клієнтами, замовленнями, товарами та постачальниками.",
-    version="1.0.0"
+    version="1.0.0",
 )
+
+website_dir = Path(__file__).resolve().parent / "Website"
 
 app.include_router(auth_router, tags=["Auth"])
 
@@ -132,14 +143,33 @@ app.include_router(product.router, tags=["Product"], dependencies=[Depends(get_c
 app.include_router(supplier.router, tags=["Supplier"], dependencies=[Depends(get_current_user)])
 app.include_router(analytics.router, tags=["Analytics"], dependencies=[Depends(get_current_user)])
 
+
+@app.on_event("startup")
+def on_startup() -> None:
+    try:
+        initialize_database_schema()
+    except Exception as exc:
+        logger.warning("Database schema initialization skipped: %s", exc)
+
+
 @app.get("/")
 def root():
     return {
-        "message": "Welcome to Electron-Shop API 🚀",
+        "message": "Welcome to Electron-Shop API",
         "docs": "/docs",
-        "redoc": "/redoc"
+        "redoc": "/redoc",
+        "website": "/site/main.html",
     }
+
+
+@app.get("/site", include_in_schema=False)
+def website_root():
+    return RedirectResponse(url="/site/main.html")
+
+
+app.mount("/site", StaticFiles(directory=website_dir, html=True), name="website")
 
 if __name__ == "__main__":
     import uvicorn
+
     uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=True)

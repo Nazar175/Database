@@ -1,0 +1,197 @@
+﻿<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TekLink - Сторінка акцій</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+    <link rel="icon" href="picture/Логотип компанії.png" type="image/png">
+</head>
+<body>
+<div class="page-wrap">
+    <header class="site-header">
+        <div class="container topbar">
+            <a class="brand" href="main.html" aria-label="TekLink - головна сторінка">
+                <img class="brand__logo" src="picture/Логотип компанії.png" alt="Логотип TekLink">
+                <h1 class="brand__name">Tek<span class="brand__name-accent">Link</span></h1>
+            </a>
+
+            <a class="catalog-btn" href="Сторінка акцій.html" aria-label="Каталог та акційні пропозиції">
+                <i class="fa-solid fa-border-all" aria-hidden="true"></i>
+                <span>Каталог</span>
+            </a>
+
+            <form class="search-wrap" action="#" method="get">
+                <div class="search-input-wrap">
+                    <img src="picture/Лупа.png" alt="Пошук">
+                    <input type="search" name="search" placeholder="Я шукаю..." aria-label="Пошук товару">
+                </div>
+                <button class="search-btn" type="submit">Знайти</button>
+            </form>
+
+            <nav class="top-icons" aria-label="Швидка навігація">
+                <a href="#" class="js-register-trigger" aria-label="Реєстрація">
+                    <img src="picture/Фігурка користувача.png" alt="Користувач">
+                </a>
+                <a href="Сторінка кошика і оплати.html" aria-label="Кошик">
+                    <img src="picture/Білий кошик.png" alt="Кошик">
+                </a>
+            </nav>
+            <button class="burger-toggle" type="button" aria-label="Відкрити мобільне меню" aria-controls="mobile-menu" aria-expanded="false">
+                <img src="picture/Бургер-меню.png" alt="Меню">
+            </button>
+
+            <nav class="mobile-menu" id="mobile-menu" aria-label="Мобільне меню">
+                <a class="mobile-menu__item" href="Сторінка кошика і оплати.html" aria-label="Кошик">
+                    <img src="picture/Білий кошик.png" alt="Кошик">
+                    <span>Кошик</span>
+                </a>
+                <a class="mobile-menu__item" href="Сторінка акцій.html" aria-label="Каталог">
+                    <i class="fa-solid fa-border-all mobile-menu__icon" aria-hidden="true"></i>
+                    <span>Каталог</span>
+                </a>
+                <a class="mobile-menu__item js-register-trigger" href="#" aria-label="Авторизація">
+                    <img src="picture/Фігурка користувача.png" alt="Авторизація">
+                    <span>Авторизація</span>
+                </a>
+            </nav>
+        </div>
+    </header>
+
+    <main class="main-content">
+        <div class="container">
+            <section class="page-hero">
+                <h1>Гарячі акції TekLink</h1>
+                <p>Щотижня оновлюємо пропозиції на комп'ютерну техніку та аксесуари. Акції діють до кінця тижня і оновлюються о 23:59 неділі.</p>
+            </section>
+
+            <!-- Основні акційні блоки -->
+            <section class="page-grid" aria-label="Основні акції">
+                <article class="page-block">
+                    <h2>Акції тижня</h2>
+                    <div class="promo-grid">
+                        <article class="promo-card">
+                            <img src="picture/5.webp" alt="Відеокарта Palit PCI-Ex nVidia GeForce RTX 5060">
+                            <div class="promo-card__content">
+                                <span class="badge">Акція -3%</span>
+                                <h3>Відеокарта Palit PCI-Ex nVidia GeForce RTX 5060</h3>
+                                <p><span class="old-price">17 599₴</span> <span class="new-price">16 999₴</span></p>
+                            </div>
+                        </article>
+
+                        <article class="promo-card">
+                            <img src="picture/6.webp" alt="Оперативна пам’ять Kingston Fury">
+                            <div class="promo-card__content">
+                                <span class="badge">Акція -12%</span>
+                                <h3>Оперативна пам’ять Kingston Fury</h3>
+                                <p><span class="old-price">8 869₴</span> <span class="new-price">6 399₴</span></p>
+                            </div>
+                        </article>
+
+                        <article class="promo-card">
+                            <img src="picture/7.webp" alt="SSD диск Kingston">
+                            <div class="promo-card__content">
+                                <span class="badge">Акція -27%</span>
+                                <h3>SSD диск Kingston</h3>
+                                <p><span class="old-price">9 359₴</span> <span class="new-price">6 999₴</span></p>
+                            </div>
+                        </article>
+                    </div>
+                </article>
+
+                <article class="page-block">
+                    <h2>Розпродаж комплектів</h2>
+                    <div class="promo-grid">
+                        <article class="promo-card">
+                            <img src="picture/8.webp" alt="Миша + клавіатура">
+                            <div class="promo-card__content">
+                                <span class="badge">Комплект -15%</span>
+                                <h3>Клавіатура + миша</h3>
+                                <p>Ідеальне доповнення до вашого персонального комп’ютера.</p>
+                            </div>
+                        </article>
+
+                        <article class="promo-card">
+                            <img src="https://content2.rozetka.com.ua/goods/images/big_tile/614940185.jpg" alt="Навушники Smart ANC Wireless">
+                            <div class="promo-card__content">
+                                <span class="badge">Комплект -20%</span>
+                                <h3>Audio Start Pack</h3>
+                                <p>Навушники + кабель + сертифікат на наступну покупку.</p>
+                            </div>
+                        </article>
+                    </div>
+                    <p><strong>Бонус:</strong> за покупку комплекту на суму від 15 000₴ даруємо сертифікат 500₴ на наступне замовлення.</p>
+                </article>
+            </section>
+
+            <section class="page-block" style="margin-top: 18px;">
+                <h2>Що ще діє зараз</h2>
+                <ul class="list-clean">
+                    <li>Оплата частинами до 24 платежів на вибрані позиції.</li>
+                    <li>Безкоштовна доставка у відділення при сумі замовлення від 2 000₴.</li>
+                    <li>Подарункове пакування для сертифікатів та навушників.</li>
+                    <li>Пріоритетна підтримка в чаті для клієнтів із бонусним рахунком.</li>
+                </ul>
+            </section>
+        </div>
+    </main>
+
+    <footer class="site-footer">
+        <div class="container footer-grid">
+            <section class="footer-col">
+                <h2 class="footer-title">Ми в соціальних мережах</h2>
+                <div class="social-row">
+                    <a href="#" aria-label="TikTok"><i class="fa-brands fa-tiktok"></i></a>
+                    <a href="#" aria-label="Telegram"><i class="fa-brands fa-telegram"></i></a>
+                    <a href="#" aria-label="Facebook"><i class="fa-brands fa-facebook"></i></a>
+                    <a href="#" aria-label="YouTube"><i class="fa-brands fa-youtube"></i></a>
+                    <a href="#" aria-label="Instagram"><i class="fa-brands fa-instagram"></i></a>
+                    <a href="#" aria-label="X"><i class="fa-brands fa-x-twitter"></i></a>
+                    <a href="#" aria-label="Viber"><i class="fa-brands fa-viber"></i></a>
+                </div>
+            </section>
+
+            <section class="footer-col">
+                <h2 class="footer-title">Інформація про компанію</h2>
+                <nav class="footer-links" aria-label="Інформація про компанію">
+                    <a href="Про нас.html">Про нас</a>
+                    <a href="Умови використання сайту.html">Умови використання сайту</a>
+                    <span>Контакти</span>
+                    <a href="Сторінка акцій.html">Нові акції</a>
+                </nav>
+            </section>
+
+            <section class="footer-col">
+                <h2 class="footer-title">Допомога</h2>
+                <nav class="footer-links" aria-label="Допомога клієнтам">
+                    <a href="Сторінка кошика і оплати.html">Доставка та оплата</a>
+                    <a href="Сторінка кошика і оплати.html">Кредит</a>
+                    <a href="Умови використання сайту.html">Гарантія</a>
+                    <a href="Умови використання сайту.html">Повернення товару</a>
+                </nav>
+            </section>
+
+            <section class="footer-col">
+                <h2 class="footer-title">Сервіси</h2>
+                <nav class="footer-links" aria-label="Сервіси TekLink">
+                    <span>Бонусний рахунок</span>
+                    <a href="Сторінка акцій.html">Подарункові сертифікати</a>
+                    <span>Відстеження замовлення</span>
+                    <a href="main.html">Популярні товари</a>
+                </nav>
+            </section>
+        </div>
+    </footer>
+</div>
+    <script src="demo.js"></script>
+</body>
+</html>
+
+
+
+
+

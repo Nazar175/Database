@@ -29,6 +29,8 @@ Base.metadata.create_all(bind=engine)
 # ---------- Fixtures ----------
 @pytest.fixture(scope="function")
 def db_session():
+    Base.metadata.drop_all(bind=engine)
+    Base.metadata.create_all(bind=engine)
     session = TestingSessionLocal()
     try:
         yield session
@@ -123,6 +125,16 @@ def _override_current_user(customer_id: int, name: str, email: str, role: str = 
         )
 
     app.dependency_overrides[get_current_user] = override_get_current_user
+
+
+def test_site_static_pages_are_served(client):
+    main_page = client.get("/site/main.html")
+    assert main_page.status_code == 200
+    assert "TekLink" in main_page.text
+
+    frontend_script = client.get("/site/demo.js")
+    assert frontend_script.status_code == 200
+    assert "teklink_account_window" in frontend_script.text
 
 # ======================================================
 # CUSTOMER TESTS

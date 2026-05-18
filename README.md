@@ -8,6 +8,7 @@
 ### venv/Scripts/activate або deactivate
 ### uvicorn main:app --reload
 ### http://127.0.0.1:8000/docs#/
+### http://127.0.0.1:8000/site/main.html
 
 ## Для запуску тестів:
 ### cd Shop_db

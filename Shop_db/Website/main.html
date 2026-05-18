@@ -1,0 +1,265 @@
+﻿<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TekLink - Головна</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+    <link rel="icon" href="picture/Логотип компанії.png" type="image/png">
+</head>
+<body>
+<div class="page-wrap">
+    <!-- Спільна навігаційна панель -->
+    <header class="site-header">
+        <div class="container topbar">
+            <a class="brand" href="main.html" aria-label="TekLink - головна сторінка">
+                <img class="brand__logo" src="picture/Логотип компанії.png" alt="Логотип TekLink">
+                <h1 class="brand__name">Tek<span class="brand__name-accent">Link</span></h1>
+            </a>
+
+            <a class="catalog-btn" href="Сторінка акцій.html" aria-label="Каталог та акційні пропозиції">
+                <i class="fa-solid fa-border-all" aria-hidden="true"></i>
+                <span>Каталог</span>
+            </a>
+
+            <form class="search-wrap" action="#" method="get">
+                <div class="search-input-wrap">
+                    <img src="picture/Лупа.png" alt="Пошук">
+                    <input type="search" name="search" placeholder="Я шукаю..." aria-label="Пошук товару">
+                </div>
+                <button class="search-btn" type="submit">Знайти</button>
+            </form>
+
+            <nav class="top-icons" aria-label="Швидка навігація">
+                <a href="#" class="js-register-trigger" aria-label="Реєстрація">
+                    <img src="picture/Фігурка користувача.png" alt="Користувач">
+                </a>
+                <a href="Сторінка кошика і оплати.html" aria-label="Кошик">
+                    <img src="picture/Білий кошик.png" alt="Кошик">
+                </a>
+            </nav>
+            <button class="burger-toggle" type="button" aria-label="Відкрити мобільне меню" aria-controls="mobile-menu" aria-expanded="false">
+                <img src="picture/Бургер-меню.png" alt="Меню">
+            </button>
+
+            <nav class="mobile-menu" id="mobile-menu" aria-label="Мобільне меню">
+                <a class="mobile-menu__item" href="Сторінка кошика і оплати.html" aria-label="Кошик">
+                    <img src="picture/Білий кошик.png" alt="Кошик">
+                    <span>Кошик</span>
+                </a>
+                <a class="mobile-menu__item" href="Сторінка акцій.html" aria-label="Каталог">
+                    <i class="fa-solid fa-border-all mobile-menu__icon" aria-hidden="true"></i>
+                    <span>Каталог</span>
+                </a>
+                <a class="mobile-menu__item js-register-trigger" href="#" aria-label="Авторизація">
+                    <img src="picture/Фігурка користувача.png" alt="Авторизація">
+                    <span>Авторизація</span>
+                </a>
+            </nav>
+        </div>
+    </header>
+
+    <main class="main-content">
+        <div class="container">
+            <!-- Банер головної сторінки, стилізований під слайдер -->
+            <section class="hero" aria-label="Головний банер TekLink">
+                <button class="slider-arrow slider-arrow--left" type="button" aria-label="Попередній банер">
+                    <img src="picture/Стрілка наліво.png" alt="">
+                </button>
+
+                <a class="hero__link" href="Сторінка акцій.html" aria-label="Перейти на сторінку акцій">
+                    <img class="hero__banner" src="picture/Банер з акціями.png" alt="Оплата частинами до 24 платежів на акційні товари продавця TekLink">
+                </a>
+
+                <button class="slider-arrow slider-arrow--right" type="button" aria-label="Наступний банер">
+                    <img src="picture/Стрілка направо.png" alt="">
+                </button>
+            </section>
+
+            <section class="products" aria-label="Найкращі пропозиції">
+                <h2 class="section-title">Найкращі пропозиції для вас</h2>
+
+                <!-- Товарна сітка на flexbox -->
+                <div class="products-grid">
+                    <article class="product-card">
+                        <div class="product-card__image-wrap">
+                            <img class="product-card__image" src="https://content2.rozetka.com.ua/goods/images/big_tile/633098034.jpg" alt="Ноутбук Acer Aspire 3 15.6">
+                        </div>
+                        <h3 class="product-card__title">Ноутбук Acer Aspire 3 15.6"</h3>
+                        <div class="product-card__bottom">
+                            <p class="product-card__price">17999₴</p>
+                            <img class="product-card__cart" src="picture/Зелений кошик.png" alt="Додати в кошик">
+                        </div>
+                    </article>
+
+                    <article class="product-card">
+                        <div class="product-card__image-wrap">
+                            <img class="product-card__image" src="picture/553474576.webp" alt="Комп'ютер ARTLINE Gaming X47 (X47v93)">
+                        </div>
+                        <h3 class="product-card__title">Комп'ютер ARTLINE Gaming X47 (X47v93) -- AMD Ryzen 5 5600X / RAM 32 ГБ / SSD 1 ТБ / nVidia GeForce RTX 5060, 8 ГБ</h3>
+                        <div class="product-card__bottom">
+                            <p class="product-card__price">51999₴</p>
+                            <img class="product-card__cart" src="picture/Зелений кошик.png" alt="Додати в кошик">
+                        </div>
+                    </article>
+
+                    <article class="product-card">
+                        <div class="product-card__image-wrap">
+                            <img class="product-card__image" src="picture/419088411.webp" alt="Монітор 27 MSI MAG 274QRF-QD E2">
+                        </div>
+                        <h3 class="product-card__title">Монітор 27" MSI MAG 274QRF-QD E2 -- Quantum Dot / Rapid IPS QHD (2K) / 180Hz / 1ms GtG / 8-Bit + FRC / DisplayHDR 400 / Type-C 65W PD / G-Sync Compatible / Adaptive Sync / HAS / Pivot / KVM / Console Mode 2K 120Hz</h3>
+                        <div class="product-card__bottom">
+                            <p class="product-card__price">12699₴</p>
+                            <img class="product-card__cart" src="picture/Зелений кошик.png" alt="Додати в кошик">
+                        </div>
+                    </article>
+
+                    <article class="product-card">
+                        <div class="product-card__image-wrap">
+                            <img class="product-card__image" src="picture/652545867.webp" alt="Настільне кріплення для монітора RZTK NB-F80 17-30'' до 9кг VESA 75x75/100x100мм Black + кабель USB3.0 1.5 м">
+                        </div>
+                        <h3 class="product-card__title">Настільне кріплення для монітора RZTK NB-F80 17-30'' до 9кг VESA 75x75/100x100мм Black + кабель USB3.0 1.5 м</h3>
+                        <div class="product-card__bottom">
+                            <p class="product-card__price">1049₴</p>
+                            <img class="product-card__cart" src="picture/Зелений кошик.png" alt="Додати в кошик">
+                        </div>
+                    </article>
+
+                    <article class="product-card">
+                        <div class="product-card__image-wrap">
+                            <img class="product-card__image" src="https://content2.rozetka.com.ua/goods/images/big_tile/653651261.jpg" alt="Samsung Galaxy S24 Ultra 12/256">
+                        </div>
+                        <h3 class="product-card__title">Samsung Galaxy S24 Ultra 12/256</h3>
+                        <div class="product-card__bottom">
+                            <p class="product-card__price">45999₴</p>
+                            <img class="product-card__cart" src="picture/Зелений кошик.png" alt="Додати в кошик">
+                        </div>
+                    </article>
+
+                    <article class="product-card">
+                        <div class="product-card__image-wrap">
+                            <img class="product-card__image" src="picture/1.webp" alt="Клавіатура бездротова AULA F75 Gasket Reaper switch Hot-Swap PBT 2.4G Wireless/BT/USB White (6948391209241)">
+                        </div>
+                        <h3 class="product-card__title">Клавіатура бездротова AULA F75 Gasket Reaper switch Hot-Swap PBT 2.4G Wireless/BT/USB White (6948391209241)</h3>
+                        <div class="product-card__bottom">
+                            <p class="product-card__price">2799₴</p>
+                            <img class="product-card__cart" src="picture/Зелений кошик.png" alt="Додати в кошик">
+                        </div>
+                    </article>
+
+                    <article class="product-card">
+                        <div class="product-card__image-wrap">
+                            <img class="product-card__image" src="picture/2.webp" alt="Ігрова приставка Sony PlayStation 5 Slim (CFI-2116)">
+                        </div>
+                        <h3 class="product-card__title">Ігрова приставка Sony PlayStation 5 Slim (CFI-2116)</h3>
+                        <div class="product-card__bottom">
+                            <p class="product-card__price">27999₴</p>
+                            <img class="product-card__cart" src="picture/Зелений кошик.png" alt="Додати в кошик">
+                        </div>
+                    </article>
+
+                    <article class="product-card">
+                        <div class="product-card__image-wrap">
+                            <img class="product-card__image" src="picture/3.webp" alt="Миша Vinga MSW-909 Silent Wireless Black/Grey">
+                        </div>
+                        <h3 class="product-card__title">Миша Vinga MSW-909 Silent Wireless Black/Grey</h3>
+                        <div class="product-card__bottom">
+                            <p class="product-card__price">399₴</p>
+                            <img class="product-card__cart" src="picture/Зелений кошик.png" alt="Додати в кошик">
+                        </div>
+                    </article>
+
+                    <article class="product-card">
+                        <div class="product-card__image-wrap">
+                            <img class="product-card__image" src="https://content2.rozetka.com.ua/goods/images/big_tile/614940179.jpg" alt="Бездротові навушники Smart 800">
+                        </div>
+                        <h3 class="product-card__title">Бездротові навушники Smart 800</h3>
+                        <div class="product-card__bottom">
+                            <p class="product-card__price">1999₴</p>
+                            <img class="product-card__cart" src="picture/Зелений кошик.png" alt="Додати в кошик">
+                        </div>
+                    </article>
+
+                    <article class="product-card">
+                        <div class="product-card__image-wrap">
+                            <img class="product-card__image" src="picture/4.webp" alt="Материнська плата Asus PRIME B760M-A D4-CSM (s1700, Intel B760, PCI-Ex16)">
+                        </div>
+                        <h3 class="product-card__title">Материнська плата Asus PRIME B760M-A D4-CSM (s1700, Intel B760, PCI-Ex16)</h3>
+                        <div class="product-card__bottom">
+                            <p class="product-card__price">4702₴</p>
+                            <img class="product-card__cart" src="picture/Зелений кошик.png" alt="Додати в кошик">
+                        </div>
+                    </article>
+                </div>
+
+                <button class="products-prev" type="button" aria-label="Показати попередній набір товарів">
+                    <i class="fa-solid fa-chevron-left" aria-hidden="true"></i>
+                </button>
+
+                <button class="products-more" type="button" aria-label="Показати більше">
+                    <i class="fa-solid fa-chevron-right" aria-hidden="true"></i>
+                </button>
+            </section>
+        </div>
+    </main>
+
+    <!-- Футер -->
+    <footer class="site-footer">
+        <div class="container footer-grid">
+            <section class="footer-col">
+                <h2 class="footer-title">Ми в соціальних мережах</h2>
+                <div class="social-row">
+                    <a href="#" aria-label="TikTok"><i class="fa-brands fa-tiktok"></i></a>
+                    <a href="#" aria-label="Telegram"><i class="fa-brands fa-telegram"></i></a>
+                    <a href="#" aria-label="Facebook"><i class="fa-brands fa-facebook"></i></a>
+                    <a href="#" aria-label="YouTube"><i class="fa-brands fa-youtube"></i></a>
+                    <a href="#" aria-label="Instagram"><i class="fa-brands fa-instagram"></i></a>
+                    <a href="#" aria-label="X"><i class="fa-brands fa-x-twitter"></i></a>
+                    <a href="#" aria-label="Viber"><i class="fa-brands fa-viber"></i></a>
+                </div>
+            </section>
+
+            <section class="footer-col">
+                <h2 class="footer-title">Інформація про компанію</h2>
+                <nav class="footer-links" aria-label="Інформація про компанію">
+                    <a href="Про нас.html">Про нас</a>
+                    <a href="Умови використання сайту.html">Умови використання сайту</a>
+                    <span>Контакти</span>
+                    <a href="Сторінка акцій.html">Нові акції</a>
+                </nav>
+            </section>
+
+            <section class="footer-col">
+                <h2 class="footer-title">Допомога</h2>
+                <nav class="footer-links" aria-label="Допомога клієнтам">
+                    <a href="Сторінка кошика і оплати.html">Доставка та оплата</a>
+                    <a href="Сторінка кошика і оплати.html">Кредит</a>
+                    <a href="Умови використання сайту.html">Гарантія</a>
+                    <a href="Умови використання сайту.html">Повернення товару</a>
+                </nav>
+            </section>
+
+            <section class="footer-col">
+                <h2 class="footer-title">Сервіси</h2>
+                <nav class="footer-links" aria-label="Сервіси TekLink">
+                    <span>Бонусний рахунок</span>
+                    <a href="Сторінка акцій.html">Подарункові сертифікати</a>
+                    <span>Відстеження замовлення</span>
+                    <a href="main.html">Популярні товари</a>
+                </nav>
+            </section>
+        </div>
+    </footer>
+</div>
+    <script src="demo.js"></script>
+</body>
+</html>
+
+
+
+
+
